@@ -13,8 +13,10 @@
         
         .board-and-eval { display: flex; gap: 12px; align-items: stretch; height: 480px; }
         #eval-bar { width: 24px; background-color: #404040; border: 2px solid #dcdcdc; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.05); position: relative;}
-        #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
-        #board-wrapper { position: relative; width: 480px; max-width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        #eval-bar::after { content: ''; position: absolute; top: calc(50% - 1px); left: 0; right: 0; height: 2px; background-color: rgba(255, 0, 0, 0.7); z-index: 10; pointer-events: none;}
+        #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
+        
+        #board-wrapper { position: relative; width: 480px; max-width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); touch-action: none; /* 💡 防止手機滑動誤觸 */ }
         #board { width: 100%; height: 100%; }
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
@@ -22,6 +24,7 @@
         .info-card { background: var(--panel-bg); padding: 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .opening-name { margin-top: 10px; font-size: 0.95rem; color: var(--accent-blue); font-weight: bold; min-height: 24px; display: flex; align-items: center; gap: 8px; }
         .opening-eco { background: #e0eaf5; color: #004085; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-family: 'Courier New', Courier, monospace; }
+        .score-badge { font-size: 1.1rem; font-weight: bold; padding: 2px 8px; border-radius: 6px; background: #f0f0f5; border: 1px solid #e0e0e0; transition: color 0.3s;}
 
         .history-container { flex-grow: 1; overflow-y: auto; background: var(--panel-bg); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
@@ -37,9 +40,9 @@
         .btn-action:hover { background: #f5f5f5; border-color: #bbb; }
 
         .suggestion-box { border-top: 1px solid #f0f0f0; padding-top: 12px; margin-top: 12px; }
-        .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 8px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; }
-        .rank { font-weight: bold; color: #bbb; }
-        .best-move { color: var(--accent-blue); font-weight: bold; flex-grow: 1; margin-left: 12px; }
+        .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
+        .rank { font-weight: bold; color: #bbb; width: 25px;}
+        .best-move { color: var(--accent-blue); font-weight: bold; flex-grow: 1; margin-left: 8px; }
         .loading { color: #aaa; font-style: italic; text-align: center; padding: 10px; }
         .highlight-square { box-shadow: inset 0 0 0 4px rgba(245, 245, 0, 0.8) !important; background-color: rgba(245, 245, 0, 0.3) !important; }
 
@@ -80,7 +83,10 @@
         <div class="side-panel">
             <div class="info-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="status" style="font-weight: bold; font-size: 1.1rem;">白方回合</span>
+                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                        <span id="status" style="font-weight: bold; font-size: 1.1rem;">白方回合</span>
+                        <span id="current-eval-score" class="score-badge" style="color:#888;">0.00</span>
+                    </div>
                     <div style="display: flex; gap: 6px;">
                         <button class="btn-action" id="import-btn">📥 匯入</button>
                         <button class="btn-action" id="flip-btn">🔄 翻轉</button>
@@ -89,7 +95,7 @@
                 </div>
                 <div id="opening-info" class="opening-name"><span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span></div>
                 <div class="suggestion-box">
-                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">WebAssembly 引擎分析</p>
+                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">stockfish 引擎分析</p>
                     <div id="engine-suggestions"><div class="loading">正在載入引擎...</div></div>
                 </div>
             </div>
@@ -125,15 +131,22 @@
             var currentArrowUci = null;
             var openingTimeout = null;
             var analysisTriggerIndex = -1;
+            var currentMultiPV = []; 
+            var lastKnownOpening = { eco: '', name: '' };
 
             var engine = new Worker('stockfish.js');
+            engine.postMessage('uci');
+            engine.postMessage('setoption name MultiPV value 3');
+
             engine.onmessage = function(event) {
                 let line = event.data;
-                if (line.includes('info depth') && line.includes('score') && line.includes('pv')) {
-                    let pvMatch = line.match(/pv ([a-h1-8]+)/);
+                if (line.includes('info depth') && line.includes('multipv') && line.includes('score') && line.includes('pv')) {
+                    let rankMatch = line.match(/multipv (\d+)/);
                     let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+                    let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
                     
-                    if (pvMatch && scoreMatch) {
+                    if (rankMatch && scoreMatch && pvMatch) {
+                        let rank = parseInt(rankMatch[1], 10);
                         let bestUci = pvMatch[1];
                         let scoreType = scoreMatch[1];
                         let scoreVal = parseInt(scoreMatch[2], 10);
@@ -145,14 +158,56 @@
                             (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
 
                         let tempGame = new Chess(game.fen());
-                        let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: 'q'});
+                        let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
                         let san = moveObj ? moveObj.san : bestUci;
 
-                        updateEngineUI(bestUci, san, scoreStr);
+                        currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
+                        renderMultiPvUI();
                     }
                 }
             };
-            engine.postMessage('uci');
+            
+            function renderMultiPvUI() {
+                if (currentMultiPV.length === 0) return;
+                
+                let html = '';
+                currentMultiPV.forEach(item => {
+                    if (!item) return;
+                    let colorClass = parseFloat(item.scoreStr) >= 0 ? '#2e7d32' : '#c62828';
+                    if (item.scoreStr.includes('M-')) colorClass = '#c62828';
+                    if (item.scoreStr.includes('M+')) colorClass = '#2e7d32';
+                    if (item.scoreStr === '0.00' || item.scoreStr === '+0.00') colorClass = '#666666';
+                    
+                    html += `
+                        <div class="move-row">
+                            <span class="rank">#${item.rank}</span>
+                            <span class="best-move">${item.san}</span>
+                            <span class="score" style="color: ${colorClass}">${item.scoreStr}</span>
+                        </div>
+                    `;
+                });
+                
+                $('#engine-suggestions').html(html);
+
+                let topMove = currentMultiPV[0];
+                if (topMove) {
+                    drawArrow(topMove.uci);
+                    updateEvalBar(topMove.scoreStr);
+                    
+                    let colorClass = parseFloat(topMove.scoreStr) >= 0 ? '#2e7d32' : '#c62828';
+                    if (topMove.scoreStr.includes('M-')) colorClass = '#c62828';
+                    if (topMove.scoreStr.includes('M+')) colorClass = '#2e7d32';
+                    if (topMove.scoreStr === '0.00' || topMove.scoreStr === '+0.00') colorClass = '#666666';
+                    $('#current-eval-score').text(topMove.scoreStr).css('color', colorClass);
+                    
+                    if (analysisTriggerIndex >= 0 && moveHistory[analysisTriggerIndex]) {
+                        moveHistory[analysisTriggerIndex].score = topMove.scoreStr;
+                        renderHistory();
+                        analysisTriggerIndex = -1; 
+                    }
+                }
+            }
+
             $('#engine-suggestions').html('<div class="loading">等待開局...</div>');
             requestAnalysis();
 
@@ -178,6 +233,7 @@
 
             function detectOpening() {
                 if (game.history().length === 0) {
+                    lastKnownOpening = { eco: '', name: '' };
                     $('#opening-info').html('<span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span>');
                     return;
                 }
@@ -188,10 +244,14 @@
                         .then(res => res.json())
                         .then(data => {
                             if (data && data.opening) {
+                                lastKnownOpening = data.opening;
                                 $('#opening-info').html(`<span class="opening-eco">${data.opening.eco}</span><span>${data.opening.name}</span>`);
+                            } 
+                            else if (lastKnownOpening.name) {
+                                $('#opening-info').html(`<span class="opening-eco">${lastKnownOpening.eco}</span><span style="color:#666;">${lastKnownOpening.name} (延伸變化)</span>`);
                             }
                         }).catch(err => {});
-                }, 1000); 
+                }, 800); 
             }
 
             function updateEvalBar(scoreStr) {
@@ -201,7 +261,7 @@
                     percentage = scoreStr.includes('-') ? 0 : 100;
                 } else {
                     let score = parseFloat(scoreStr);
-                    percentage = 50 + (50 * (2 / Math.PI) * Math.atan(score / 4));
+                    percentage = 50 + (50 * (2 / Math.PI) * Math.atan(score / 8));
                     percentage = Math.max(2, Math.min(98, percentage));
                 }
                 $('#eval-fill').css('height', percentage + '%');
@@ -231,57 +291,45 @@
                 if (uciMove !== undefined) currentArrowUci = uciMove;
                 if (!currentArrowUci || game.game_over()) return;
 
-                var from = currentArrowUci.substring(0, 2), to = currentArrowUci.substring(2, 4);
-                var $startSq = $('.square-' + from), $endSq = $('.square-' + to), $wrapper = $('#board-wrapper');
+                var from = currentArrowUci.substring(0, 2);
+                var to = currentArrowUci.substring(2, 4);
+                
+                var $startSq = $('.square-' + from);
+                var $endSq = $('.square-' + to);
+                var $wrapper = $('#board-wrapper');
+
                 if ($startSq.length === 0 || $endSq.length === 0) return;
 
-                var boardWidth = $('#board').width();
-                var squareSize = boardWidth / 8;
-                
-                function getCoord(sq) {
-                    var col = sq.charCodeAt(0) - 97; 
-                    var row = 8 - parseInt(sq[1]);
-                    if (board.orientation() === 'black') { col = 7 - col; row = 7 - row; }
-                    return { x: (col * squareSize) + (squareSize / 2), y: (row * squareSize) + (squareSize / 2) };
-                }
+                var wOffset = $wrapper.offset();
+                var sOffset = $startSq.offset();
+                var eOffset = $endSq.offset();
 
-                var start = getCoord(from), end = getCoord(to);
+                var startX = sOffset.left - wOffset.left + ($startSq.width() / 2);
+                var startY = sOffset.top - wOffset.top + ($startSq.height() / 2);
+                var endX = eOffset.left - wOffset.left + ($endSq.width() / 2);
+                var endY = eOffset.top - wOffset.top + ($endSq.height() / 2);
+
                 var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', start.x); line.setAttribute('y1', start.y);
-                line.setAttribute('x2', end.x); line.setAttribute('y2', end.y);
-                line.setAttribute('stroke', '#151515'); line.setAttribute('stroke-width', squareSize * 0.22); 
-                line.setAttribute('marker-end', 'url(#arrowhead)'); line.setAttribute('opacity', '0.65');
+                line.setAttribute('x1', startX); line.setAttribute('y1', startY);
+                line.setAttribute('x2', endX); line.setAttribute('y2', endY);
+                line.setAttribute('stroke', '#151515'); 
+                line.setAttribute('stroke-width', $startSq.width() * 0.18); 
+                line.setAttribute('marker-end', 'url(#arrowhead)'); 
+                line.setAttribute('opacity', '0.7');
                 $group.append(line);
-            }
-
-            function updateEngineUI(bestUci, san, scoreStr) {
-                let colorClass = parseFloat(scoreStr) >= 0 ? '#2e7d32' : '#c62828';
-                if (scoreStr.includes('M-')) colorClass = '#c62828';
-                
-                $('#engine-suggestions').html(`
-                    <div class="move-row">
-                        <span class="rank">#1</span>
-                        <span class="best-move">${san}</span>
-                        <span class="score" style="color: ${colorClass}">${scoreStr}</span>
-                    </div>
-                `);
-                
-                drawArrow(bestUci);
-                updateEvalBar(scoreStr);
-                
-                if (analysisTriggerIndex >= 0 && moveHistory[analysisTriggerIndex]) {
-                    moveHistory[analysisTriggerIndex].score = scoreStr;
-                    renderHistory();
-                    analysisTriggerIndex = -1; 
-                }
             }
 
             function requestAnalysis(triggeredByMoveIndex = -1) {
                 if (!engine) return;
+                
+                engine.postMessage('stop');
                 analysisTriggerIndex = triggeredByMoveIndex;
-                $('#engine-suggestions').html('<div class="loading">深度運算中...</div>');
+                currentMultiPV = []; 
+                $('#engine-suggestions').html('<div class="loading">深度 16 運算中...</div>');
+                $('#current-eval-score').text('...').css('color', '#888');
+                
                 engine.postMessage('position fen ' + game.fen());
-                engine.postMessage('go movetime 1500');
+                engine.postMessage('go depth 16');
             }
 
             function updateUI() {
@@ -297,10 +345,13 @@
                 detectOpening();
             }
 
+            // 💡 修正 1：拖曳座標校正，確保翻轉後也能正常下棋
             function onDrop(source, target) {
+                // 如果是在黑方視角，不需額外轉換，chessboardjs 原生已處理
                 var move = game.move({ from: source, to: target, promotion: 'q' });
                 if (move === null) return 'snapback';
 
+                // 💡 修正 2：走新步法時，徹底清空未來的時間線 (redoStack)
                 redoStack = []; 
                 $('.highlight-square').removeClass('highlight-square');
                 clickedSquare = null;
@@ -324,6 +375,7 @@
             };
             board = Chessboard('board', config);
 
+            // 💡 修正 3：優化手機端點擊邏輯，避免與滑動衝突
             $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
                 if (e.type === 'touchstart') lastTouchTime = Date.now();
                 else if (Date.now() - lastTouchTime < 100) return;
@@ -344,6 +396,7 @@
                     return;
                 }
                 
+                // 💡 同步清空未來時間線
                 redoStack = []; 
                 board.position(game.fen());
                 clickedSquare = null;
@@ -367,7 +420,12 @@
                 $('.highlight-square').removeClass('highlight-square');
                 clickedSquare = null;
                 
-                if (game.history().length === 0) $('#opening-info').html('<span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span>');
+                safePlaySound(sounds.move);
+                
+                if (game.history().length === 0) {
+                    lastKnownOpening = { eco: '', name: '' };
+                    $('#opening-info').html('<span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span>');
+                }
                 updateUI(); requestAnalysis();
             }
 
@@ -387,15 +445,13 @@
 
             $('#flip-btn').on('click', function() {
                 board.flip();
-                drawArrow(currentArrowUci); 
+                setTimeout(() => drawArrow(currentArrowUci), 50); 
             });
 
             $(document).on('keydown', function(e) {
-                if (e.key === 'ArrowLeft') {
-                    doUndo();
-                } else if (e.key === 'ArrowRight') {
-                    doRedo();
-                }
+                if ($(e.target).is('textarea')) return;
+                if (e.key === 'ArrowLeft') doUndo();
+                else if (e.key === 'ArrowRight') doRedo();
             });
 
             $('#import-btn').on('click', () => $('#pgn-modal').css('display', 'flex'));
