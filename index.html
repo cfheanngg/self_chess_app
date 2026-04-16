@@ -16,7 +16,7 @@
         #eval-bar::after { content: ''; position: absolute; top: calc(50% - 1px); left: 0; right: 0; height: 2px; background-color: rgba(255, 0, 0, 0.7); z-index: 10; pointer-events: none;}
         #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
         
-        #board-wrapper { position: relative; width: 480px; max-width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); touch-action: none; /* 💡 防止手機滑動誤觸 */ }
+        #board-wrapper { position: relative; width: 480px; max-width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); touch-action: none; }
         #board { width: 100%; height: 100%; }
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
@@ -133,6 +133,9 @@
             var analysisTriggerIndex = -1;
             var currentMultiPV = []; 
             var lastKnownOpening = { eco: '', name: '' };
+            
+            // 💡 關鍵變數：用來過濾上一動殘留的快取訊息
+            var isNewSearch = false; 
 
             var engine = new Worker('stockfish.js');
             engine.postMessage('uci');
@@ -141,11 +144,20 @@
             engine.onmessage = function(event) {
                 let line = event.data;
                 if (line.includes('info depth') && line.includes('multipv') && line.includes('score') && line.includes('pv')) {
+                    let depthMatch = line.match(/info depth (\d+)/);
                     let rankMatch = line.match(/multipv (\d+)/);
                     let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
                     let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
                     
-                    if (rankMatch && scoreMatch && pvMatch) {
+                    if (depthMatch && rankMatch && scoreMatch && pvMatch) {
+                        let depth = parseInt(depthMatch[1], 10);
+                        
+                        // 💡 防護門：如果是新的搜尋，丟棄所有深度過高的舊垃圾訊息
+                        if (isNewSearch) {
+                            if (depth > 2) return; 
+                            isNewSearch = false; // 看到深度 1 或 2，確認是新鮮的資料，打開防護門
+                        }
+
                         let rank = parseInt(rankMatch[1], 10);
                         let bestUci = pvMatch[1];
                         let scoreType = scoreMatch[1];
@@ -323,6 +335,9 @@
                 if (!engine) return;
                 
                 engine.postMessage('stop');
+                
+                // 💡 啟動防護門
+                isNewSearch = true; 
                 analysisTriggerIndex = triggeredByMoveIndex;
                 currentMultiPV = []; 
                 $('#engine-suggestions').html('<div class="loading">深度 16 運算中...</div>');
@@ -345,13 +360,10 @@
                 detectOpening();
             }
 
-            // 💡 修正 1：拖曳座標校正，確保翻轉後也能正常下棋
             function onDrop(source, target) {
-                // 如果是在黑方視角，不需額外轉換，chessboardjs 原生已處理
                 var move = game.move({ from: source, to: target, promotion: 'q' });
                 if (move === null) return 'snapback';
 
-                // 💡 修正 2：走新步法時，徹底清空未來的時間線 (redoStack)
                 redoStack = []; 
                 $('.highlight-square').removeClass('highlight-square');
                 clickedSquare = null;
@@ -375,7 +387,6 @@
             };
             board = Chessboard('board', config);
 
-            // 💡 修正 3：優化手機端點擊邏輯，避免與滑動衝突
             $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
                 if (e.type === 'touchstart') lastTouchTime = Date.now();
                 else if (Date.now() - lastTouchTime < 100) return;
@@ -396,7 +407,6 @@
                     return;
                 }
                 
-                // 💡 同步清空未來時間線
                 redoStack = []; 
                 board.position(game.fen());
                 clickedSquare = null;
