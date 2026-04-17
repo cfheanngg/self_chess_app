@@ -190,6 +190,9 @@
                 $.ajax({
                     url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}`,
                     method: 'GET',
+                    headers: {
+                        "ngrok-skip-browser-warning": "true" 
+                    },
                     success: function(data) {
                         data.analysis.forEach((line) => {
                             let rankMatch = line.match(/multipv (\d+)/);
