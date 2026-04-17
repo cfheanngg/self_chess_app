@@ -187,11 +187,6 @@
                 // 例如： "https://1234-abcd-efgh.ngrok-free.app"
                 const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
                 
-                if (colabBaseUrl === "https://tuesday-spoilage-ceremony.ngrok-free.dev") {
-                    $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 錯誤：請先在程式碼中填入 Colab 網址！</div>');
-                    return;
-                }
-
                 $.ajax({
                     url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}`,
                     method: 'GET',
