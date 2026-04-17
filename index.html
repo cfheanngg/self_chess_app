@@ -95,8 +95,8 @@
                 </div>
                 <div id="opening-info" class="opening-name"><span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span></div>
                 <div class="suggestion-box">
-                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">stockfish 引擎分析</p>
-                    <div id="engine-suggestions"><div class="loading">正在載入引擎...</div></div>
+                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">Colab 雲端大腦 (Depth 24)</p>
+                    <div id="engine-suggestions"><div class="loading">正在請求連線...</div></div>
                 </div>
             </div>
             <div class="history-container">
@@ -134,50 +134,7 @@
             var currentMultiPV = []; 
             var lastKnownOpening = { eco: '', name: '' };
             
-            // 💡 關鍵變數：用來過濾上一動殘留的快取訊息
-            var isNewSearch = false; 
-
-            engine.postMessage('uci');
-            engine.postMessage('setoption name MultiPV value 3');
-
-            engine.onmessage = function(event) {
-                let line = event.data;
-                if (line.includes('info depth') && line.includes('multipv') && line.includes('score') && line.includes('pv')) {
-                    let depthMatch = line.match(/info depth (\d+)/);
-                    let rankMatch = line.match(/multipv (\d+)/);
-                    let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
-                    let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
-                    
-                    if (depthMatch && rankMatch && scoreMatch && pvMatch) {
-                        let depth = parseInt(depthMatch[1], 10);
-                        
-                        // 💡 防護門：如果是新的搜尋，丟棄所有深度過高的舊垃圾訊息
-                        if (isNewSearch) {
-                            if (depth > 2) return; 
-                            isNewSearch = false; // 看到深度 1 或 2，確認是新鮮的資料，打開防護門
-                        }
-
-                        let rank = parseInt(rankMatch[1], 10);
-                        let bestUci = pvMatch[1];
-                        let scoreType = scoreMatch[1];
-                        let scoreVal = parseInt(scoreMatch[2], 10);
-                        
-                        if (game.turn() === 'b') scoreVal = -scoreVal;
-
-                        let scoreStr = scoreType === 'mate' ? 
-                            (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
-                            (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
-
-                        let tempGame = new Chess(game.fen());
-                        let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
-                        let san = moveObj ? moveObj.san : bestUci;
-
-                        currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
-                        renderMultiPvUI();
-                    }
-                }
-            };
-            
+            // 💡 渲染引擎建議介面
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
                 
@@ -219,8 +176,57 @@
                 }
             }
 
-            $('#engine-suggestions').html('<div class="loading">等待開局...</div>');
-            requestAnalysis();
+            // 💡 呼叫遠端 Colab 大腦
+            function requestAnalysis(triggeredByMoveIndex = -1) {
+                analysisTriggerIndex = triggeredByMoveIndex;
+                currentMultiPV = []; 
+                $('#engine-suggestions').html('<div class="loading">正在請求 Colab 超級電腦 (深度 24)...</div>');
+                $('#current-eval-score').text('...').css('color', '#888');
+                
+                // 🚀 請把下面這串引號裡面的網址，換成你 Colab 產生出來的 ngrok 網址
+                // 例如： "https://1234-abcd-efgh.ngrok-free.app"
+                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+                
+                if (colabBaseUrl === "https://tuesday-spoilage-ceremony.ngrok-free.dev") {
+                    $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 錯誤：請先在程式碼中填入 Colab 網址！</div>');
+                    return;
+                }
+
+                $.ajax({
+                    url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}`,
+                    method: 'GET',
+                    success: function(data) {
+                        data.analysis.forEach((line) => {
+                            let rankMatch = line.match(/multipv (\d+)/);
+                            let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+                            let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
+                            
+                            if (rankMatch && scoreMatch && pvMatch) {
+                                let rank = parseInt(rankMatch[1], 10);
+                                let bestUci = pvMatch[1];
+                                let scoreType = scoreMatch[1];
+                                let scoreVal = parseInt(scoreMatch[2], 10);
+                                
+                                if (game.turn() === 'b') scoreVal = -scoreVal;
+
+                                let scoreStr = scoreType === 'mate' ? 
+                                    (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
+                                    (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
+
+                                let tempGame = new Chess(game.fen());
+                                let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
+                                let san = moveObj ? moveObj.san : bestUci;
+
+                                currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
+                            }
+                        });
+                        renderMultiPvUI();
+                    },
+                    error: function() {
+                        $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
+                    }
+                });
+            }
 
             const sounds = {
                 move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3'),
@@ -329,31 +335,6 @@
                 line.setAttribute('opacity', '0.7');
                 $group.append(line);
             }
-
-            function requestAnalysis(triggeredByMoveIndex = -1) {
-            analysisTriggerIndex = triggeredByMoveIndex;
-            currentMultiPV = []; 
-            $('#engine-suggestions').html('<div class="loading">正在請求 Colab 超級電腦 (深度 22)...</div>');
-    
-            // 💡 填入剛才 Colab 執行後產生的那一串 https 網址
-            const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
-    
-            $.ajax({
-                url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}`,
-                method: 'GET',
-                success: function(data) {
-                // 解析 Colab 回傳的數據
-                data.analysis.forEach((line, index) => {
-                // 這裡沿用原本解析 info depth 內容的邏輯來更新介面
-                // ... (解析 line 內容並填入 currentMultiPV)
-            });
-            renderMultiPvUI();
-        },
-        error: function() {
-            $('#engine-suggestions').html('<div class="loading" style="color:red;">無法連線至 Colab 大腦，請確認 Colab 是否正在運行。</div>');
-        }
-    });
-}
 
             function updateUI() {
                 var color = (game.turn() === 'w') ? '白方' : '黑方';
@@ -486,7 +467,11 @@
                 } else alert('無效的 PGN 格式！');
             });
 
+            // 啟動第一步：如果網址還沒填，顯示錯誤；填了就畫棋盤並請求分析
+            $('#engine-suggestions').html('<div class="loading">等待開局...</div>');
             updateUI();
+            setTimeout(() => { requestAnalysis(); }, 500); // 稍微延遲讓棋盤先畫好
+            
             $(window).resize(() => { board.resize(); setTimeout(() => drawArrow(currentArrowUci), 100); });
         });
     </script>
