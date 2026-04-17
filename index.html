@@ -137,7 +137,6 @@
             // 💡 關鍵變數：用來過濾上一動殘留的快取訊息
             var isNewSearch = false; 
 
-            var engine = new Worker('stockfish.js');
             engine.postMessage('uci');
             engine.postMessage('setoption name MultiPV value 3');
 
