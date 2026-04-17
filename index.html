@@ -185,67 +185,112 @@
                 }
             }
 
-            // 💡 搭載「防手震」與「連線腰斬」的終極版 requestAnalysis
+            // 💡 新增全域變數
+            var analysisTimeout = null;
+            var currentAjaxRequest = null;
+
+            // 🚀 搭載「開局庫秒殺」的兩段式分析系統
             function requestAnalysis(triggeredByMoveIndex = -1) {
                 analysisTriggerIndex = triggeredByMoveIndex;
                 currentMultiPV = []; 
-                $('#engine-suggestions').html('<div class="loading">正在請求 Colab 雲端大腦...</div>');
+                $('#engine-suggestions').html('<div class="loading">🔍 翻閱大師開局庫中...</div>');
                 $('#current-eval-score').text('...').css('color', '#888');
                 
-                // 🛑 中斷還在倒數的舊計時器
                 if (analysisTimeout) clearTimeout(analysisTimeout);
-                
-                // 🛑 如果上一個快遞員還在路上，強制把他叫回來
                 if (currentAjaxRequest) currentAjaxRequest.abort();
 
-                // ⏳ 延遲 400 毫秒後才發送請求
+                // ⏳ 防手震機制
                 analysisTimeout = setTimeout(() => {
-                    const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+                    let fen = game.fen();
                     let currentMultiPvValue = $('#turbo-toggle').is(':checked') ? 1 : 3;
                     
-                    currentAjaxRequest = $.ajax({
-                        url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}&multipv=${currentMultiPvValue}`,
-                        method: 'GET',
-                        headers: {
-                            "ngrok-skip-browser-warning": "true" 
-                        },
-                        success: function(data) {
-                            currentAjaxRequest = null; // 順利完成，清空快遞員紀錄
-                            data.analysis.forEach((line) => {
-                                let rankMatch = line.match(/multipv (\d+)/);
-                                let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
-                                let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
+                    // 🌟 第一段火箭：攔截請求，先去問 Lichess 大師庫
+                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=${currentMultiPvValue}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            // 條件：必須在大師庫裡有紀錄，且該步至少被下過 10 次 (過濾掉超冷門爛招)
+                            if (data.moves && data.moves.length > 0 && (data.moves[0].white + data.moves[0].draws + data.moves[0].black) > 10) {
                                 
-                                if (rankMatch && scoreMatch && pvMatch) {
-                                    let rank = parseInt(rankMatch[1], 10);
-                                    let bestUci = pvMatch[1];
-                                    let scoreType = scoreMatch[1];
-                                    let scoreVal = parseInt(scoreMatch[2], 10);
+                                $('.suggestion-box p').html('📖 Lichess 大師開局庫 (毫秒級秒殺)');
+                                
+                                currentMultiPV = data.moves.map((m, index) => {
+                                    let total = m.white + m.draws + m.black;
+                                    // 為了維持統一視角，我們算出「白方勝率」與「和局率」
+                                    let wWin = ((m.white / total) * 100).toFixed(0);
+                                    let draw = ((m.draws / total) * 100).toFixed(0);
                                     
-                                    if (game.turn() === 'b') scoreVal = -scoreVal;
-
-                                    let scoreStr = scoreType === 'mate' ? 
-                                        (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
-                                        (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
-
-                                    let tempGame = new Chess(game.fen());
-                                    let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
-                                    let san = moveObj ? moveObj.san : bestUci;
-
-                                    currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
-                                }
-                            });
-                            renderMultiPvUI();
-                        },
-                        error: function(jqXHR, textStatus) {
-                            currentAjaxRequest = null;
-                            // 如果是我們自己手動腰斬的，不用顯示紅字錯誤
-                            if (textStatus === 'abort') return; 
-                            
-                            $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
-                        }
-                    });
+                                    return {
+                                        rank: index + 1,
+                                        san: m.san,
+                                        scoreStr: `W:${wWin}% D:${draw}%`, // 顯示勝率數據
+                                        uci: m.uci
+                                    };
+                                });
+                                
+                                renderMultiPvUI();
+                                
+                                // 開局庫不影響優勢條，顯示標籤
+                                $('#eval-fill').css('height', '50%');
+                                $('#current-eval-score').text('📖 主流譜').css('color', '#0056b3');
+                                
+                            } else {
+                                // 🌟 第二段火箭：脫譜了！喚醒 Colab 大廚
+                                $('.suggestion-box p').html('Colab 極限大腦 (深度運算中...)');
+                                callColabEngine(fen, currentMultiPvValue);
+                            }
+                        }).catch(() => {
+                            // 萬一 Lichess API 剛好當機，直接叫 Colab 出馬
+                            $('.suggestion-box p').html('Colab 極限大腦 (深度運算中...)');
+                            callColabEngine(fen, currentMultiPvValue);
+                        });
                 }, 400); 
+            }
+
+            // 🧠 負責呼叫 Colab 的苦力函數
+            function callColabEngine(fen, currentMultiPvValue) {
+                // ⚠️ 記得確保這裡的網址是你最新的 ngrok 網址
+                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+                $('#engine-suggestions').html('<div class="loading">大腦狂轉中，請稍候...</div>');
+                
+                currentAjaxRequest = $.ajax({
+                    url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(fen)}&multipv=${currentMultiPvValue}`,
+                    method: 'GET',
+                    headers: { "ngrok-skip-browser-warning": "true" },
+                    success: function(data) {
+                        currentAjaxRequest = null; 
+                        data.analysis.forEach((line) => {
+                            let rankMatch = line.match(/multipv (\d+)/);
+                            let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+                            let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
+                            
+                            if (rankMatch && scoreMatch && pvMatch) {
+                                let rank = parseInt(rankMatch[1], 10);
+                                let bestUci = pvMatch[1];
+                                let scoreType = scoreMatch[1];
+                                let scoreVal = parseInt(scoreMatch[2], 10);
+                                
+                                if (game.turn() === 'b') scoreVal = -scoreVal;
+
+                                let scoreStr = scoreType === 'mate' ? 
+                                    (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
+                                    (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
+
+                                let tempGame = new Chess(game.fen());
+                                let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
+                                let san = moveObj ? moveObj.san : bestUci;
+
+                                currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
+                            }
+                        });
+                        $('.suggestion-box p').html('Colab 雲端大腦 (最佳著法推薦)');
+                        renderMultiPvUI();
+                    },
+                    error: function(jqXHR, textStatus) {
+                        currentAjaxRequest = null;
+                        if (textStatus === 'abort') return; 
+                        $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
+                    }
+                });
             }
 
             const sounds = {
