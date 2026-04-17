@@ -20,7 +20,7 @@
         #board { width: 100%; height: 100%; }
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
-        .side-panel { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 420px; height: 480px; }
+        .side-panel { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 480px; height: 480px; }
         .info-card { background: var(--panel-bg); padding: 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .opening-name { margin-top: 10px; font-size: 0.95rem; color: var(--accent-blue); font-weight: bold; min-height: 24px; display: flex; align-items: center; gap: 8px; }
         .opening-eco { background: #e0eaf5; color: #004085; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-family: 'Courier New', Courier, monospace; }
@@ -38,6 +38,10 @@
 
         .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; transition: all 0.2s; font-size: 0.85rem;}
         .btn-action:hover { background: #f5f5f5; border-color: #bbb; }
+        
+        /* 極速按鈕專屬樣式 */
+        .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; margin: 0; }
+        .btn-turbo:hover { background: #ffebee; border-color: #ef9a9a; }
 
         .suggestion-box { border-top: 1px solid #f0f0f0; padding-top: 12px; margin-top: 12px; }
         .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
@@ -88,20 +92,17 @@
                         <span id="current-eval-score" class="score-badge" style="color:#888;">0.00</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button class="btn-action" id="import-btn">📥 匯入</button>
-                        <button class="btn-action" id="flip-btn">🔄 翻轉</button>
-                        <button class="btn-action" id="undo-btn">⬅ 悔棋</button>
+                        <label class="btn-action btn-turbo">
+                            <input type="checkbox" id="turbo-toggle" style="margin: 0; cursor: pointer;"> 單一
+                        </label>
+                        <button class="btn-action" id="import-btn"> 匯入</button>
+                        <button class="btn-action" id="flip-btn"> 翻轉</button>
+                        <button class="btn-action" id="undo-btn"> 悔棋</button>
                     </div>
                 </div>
                 <div id="opening-info" class="opening-name"><span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span></div>
                 <div class="suggestion-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <p style="margin: 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">Colab 雲端大腦 (Depth 18)</p>
-                    <label style="font-size: 0.85rem; color: #d32f2f; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <input type="checkbox" id="turbo-toggle" style="cursor: pointer;">
-                    最佳著法
-                    </label>
-                </div>
+                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">Colab 雲端大腦 (最佳著法推薦)</p>
                     <div id="engine-suggestions"><div class="loading">正在請求連線...</div></div>
                 </div>
             </div>
@@ -140,7 +141,6 @@
             var currentMultiPV = []; 
             var lastKnownOpening = { eco: '', name: '' };
             
-            // 💡 渲染引擎建議介面
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
                 
@@ -182,18 +182,16 @@
                 }
             }
 
-            // 💡 呼叫遠端 Colab 大腦
             function requestAnalysis(triggeredByMoveIndex = -1) {
                 analysisTriggerIndex = triggeredByMoveIndex;
                 currentMultiPV = []; 
-                $('#engine-suggestions').html('<div class="loading">正在請求 Colab 超級電腦 (深度 24)...</div>');
+                $('#engine-suggestions').html('<div class="loading">正在請求 Colab 雲端大腦...</div>');
                 $('#current-eval-score').text('...').css('color', '#888');
                 
-                // 🚀 請把下面這串引號裡面的網址，換成你 Colab 產生出來的 ngrok 網址
-                // 例如： "https://1234-abcd-efgh.ngrok-free.app"
                 const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
                 
                 let currentMultiPvValue = $('#turbo-toggle').is(':checked') ? 1 : 3;
+                
                 $.ajax({
                     url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}&multipv=${currentMultiPvValue}`,
                     method: 'GET',
@@ -212,6 +210,7 @@
                                 let scoreType = scoreMatch[1];
                                 let scoreVal = parseInt(scoreMatch[2], 10);
                                 
+                                // 🔥 核心邏輯：翻轉黑方分數，確保所有正負數皆以「白方視角」呈現
                                 if (game.turn() === 'b') scoreVal = -scoreVal;
 
                                 let scoreStr = scoreType === 'mate' ? 
@@ -262,7 +261,6 @@
                 clearTimeout(openingTimeout);
                 openingTimeout = setTimeout(() => {
                     let fen = game.fen();
-                    // 🔥 修正點：改回使用精準度極高的 masters 大師資料庫 API
                     fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0`)
                         .then(res => res.json())
                         .then(data => {
@@ -270,7 +268,6 @@
                                 lastKnownOpening = data.opening;
                                 $('#opening-info').html(`<span class="opening-eco">${data.opening.eco}</span><span>${data.opening.name}</span>`);
                             } 
-                            // 💡 記憶體機制：如果偏離主流譜，顯示延伸變化
                             else if (lastKnownOpening.name) {
                                 $('#opening-info').html(`<span class="opening-eco">${lastKnownOpening.eco}</span><span style="color:#666;">${lastKnownOpening.name} (延伸變化)</span>`);
                             }
@@ -476,14 +473,14 @@
                 } else alert('無效的 PGN 格式！');
             });
 
-            // 啟動第一步：如果網址還沒填，顯示錯誤；填了就畫棋盤並請求分析
+            // 啟動分析
             $('#engine-suggestions').html('<div class="loading">等待開局...</div>');
             updateUI();
-            setTimeout(() => { requestAnalysis(); }, 500); // 稍微延遲讓棋盤先畫好
+            setTimeout(() => { requestAnalysis(); }, 500);
             
             // 當使用者點擊「極速模式」開關時，立刻重新請求分析目前的盤面
             $('#turbo-toggle').on('change', function() {
-            requestAnalysis(); 
+                requestAnalysis(); 
             });
             $(window).resize(() => { board.resize(); setTimeout(() => drawArrow(currentArrowUci), 100); });
         });
