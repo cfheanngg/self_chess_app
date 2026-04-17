@@ -257,17 +257,21 @@
                 clearTimeout(openingTimeout);
                 openingTimeout = setTimeout(() => {
                     let fen = game.fen();
-                    fetch(`https://explorer.lichess.ovh/lichess?variant=standard&moves=0&fen=${encodeURIComponent(fen)}`)
+                    // 🔥 修正點：改回使用精準度極高的 masters 大師資料庫 API
+                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0`)
                         .then(res => res.json())
                         .then(data => {
                             if (data && data.opening) {
                                 lastKnownOpening = data.opening;
                                 $('#opening-info').html(`<span class="opening-eco">${data.opening.eco}</span><span>${data.opening.name}</span>`);
                             } 
+                            // 💡 記憶體機制：如果偏離主流譜，顯示延伸變化
                             else if (lastKnownOpening.name) {
                                 $('#opening-info').html(`<span class="opening-eco">${lastKnownOpening.eco}</span><span style="color:#666;">${lastKnownOpening.name} (延伸變化)</span>`);
                             }
-                        }).catch(err => {});
+                        }).catch(err => {
+                            console.error("開局庫連線失敗:", err);
+                        });
                 }, 800); 
             }
 
