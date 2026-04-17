@@ -331,20 +331,29 @@
             }
 
             function requestAnalysis(triggeredByMoveIndex = -1) {
-                if (!engine) return;
-                
-                engine.postMessage('stop');
-                
-                // 💡 啟動防護門
-                isNewSearch = true; 
-                analysisTriggerIndex = triggeredByMoveIndex;
-                currentMultiPV = []; 
-                $('#engine-suggestions').html('<div class="loading">深度 16 運算中...</div>');
-                $('#current-eval-score').text('...').css('color', '#888');
-                
-                engine.postMessage('position fen ' + game.fen());
-                engine.postMessage('go depth 16');
-            }
+            analysisTriggerIndex = triggeredByMoveIndex;
+            currentMultiPV = []; 
+            $('#engine-suggestions').html('<div class="loading">正在請求 Colab 超級電腦 (深度 22)...</div>');
+    
+            // 💡 填入剛才 Colab 執行後產生的那一串 https 網址
+            const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+    
+            $.ajax({
+                url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}`,
+                method: 'GET',
+                success: function(data) {
+                // 解析 Colab 回傳的數據
+                data.analysis.forEach((line, index) => {
+                // 這裡沿用原本解析 info depth 內容的邏輯來更新介面
+                // ... (解析 line 內容並填入 currentMultiPV)
+            });
+            renderMultiPvUI();
+        },
+        error: function() {
+            $('#engine-suggestions').html('<div class="loading" style="color:red;">無法連線至 Colab 大腦，請確認 Colab 是否正在運行。</div>');
+        }
+    });
+}
 
             function updateUI() {
                 var color = (game.turn() === 'w') ? '白方' : '黑方';
