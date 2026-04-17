@@ -39,7 +39,6 @@
         .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; transition: all 0.2s; font-size: 0.85rem;}
         .btn-action:hover { background: #f5f5f5; border-color: #bbb; }
         
-        /* 極速按鈕專屬樣式 */
         .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; margin: 0; }
         .btn-turbo:hover { background: #ffebee; border-color: #ef9a9a; }
 
@@ -93,11 +92,11 @@
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <label class="btn-action btn-turbo">
-                            <input type="checkbox" id="turbo-toggle" style="margin: 0; cursor: pointer;"> 單一
+                            <input type="checkbox" id="turbo-toggle" style="margin: 0; cursor: pointer;"> ⚡ 極速
                         </label>
-                        <button class="btn-action" id="import-btn"> 匯入</button>
-                        <button class="btn-action" id="flip-btn"> 翻轉</button>
-                        <button class="btn-action" id="undo-btn"> 悔棋</button>
+                        <button class="btn-action" id="import-btn">📥 匯入</button>
+                        <button class="btn-action" id="flip-btn">🔄 翻轉</button>
+                        <button class="btn-action" id="undo-btn">⬅ 悔棋</button>
                     </div>
                 </div>
                 <div id="opening-info" class="opening-name"><span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span></div>
@@ -141,6 +140,10 @@
             var currentMultiPV = []; 
             var lastKnownOpening = { eco: '', name: '' };
             
+            // 💡 新增的兩個全域變數，控制防手震與請求腰斬
+            var analysisTimeout = null;
+            var currentAjaxRequest = null;
+            
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
                 
@@ -182,54 +185,67 @@
                 }
             }
 
+            // 💡 搭載「防手震」與「連線腰斬」的終極版 requestAnalysis
             function requestAnalysis(triggeredByMoveIndex = -1) {
                 analysisTriggerIndex = triggeredByMoveIndex;
                 currentMultiPV = []; 
                 $('#engine-suggestions').html('<div class="loading">正在請求 Colab 雲端大腦...</div>');
                 $('#current-eval-score').text('...').css('color', '#888');
                 
-                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+                // 🛑 中斷還在倒數的舊計時器
+                if (analysisTimeout) clearTimeout(analysisTimeout);
                 
-                let currentMultiPvValue = $('#turbo-toggle').is(':checked') ? 1 : 3;
-                
-                $.ajax({
-                    url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}&multipv=${currentMultiPvValue}`,
-                    method: 'GET',
-                    headers: {
-                        "ngrok-skip-browser-warning": "true" 
-                    },
-                    success: function(data) {
-                        data.analysis.forEach((line) => {
-                            let rankMatch = line.match(/multipv (\d+)/);
-                            let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
-                            let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
-                            
-                            if (rankMatch && scoreMatch && pvMatch) {
-                                let rank = parseInt(rankMatch[1], 10);
-                                let bestUci = pvMatch[1];
-                                let scoreType = scoreMatch[1];
-                                let scoreVal = parseInt(scoreMatch[2], 10);
+                // 🛑 如果上一個快遞員還在路上，強制把他叫回來
+                if (currentAjaxRequest) currentAjaxRequest.abort();
+
+                // ⏳ 延遲 400 毫秒後才發送請求
+                analysisTimeout = setTimeout(() => {
+                    const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
+                    let currentMultiPvValue = $('#turbo-toggle').is(':checked') ? 1 : 3;
+                    
+                    currentAjaxRequest = $.ajax({
+                        url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(game.fen())}&multipv=${currentMultiPvValue}`,
+                        method: 'GET',
+                        headers: {
+                            "ngrok-skip-browser-warning": "true" 
+                        },
+                        success: function(data) {
+                            currentAjaxRequest = null; // 順利完成，清空快遞員紀錄
+                            data.analysis.forEach((line) => {
+                                let rankMatch = line.match(/multipv (\d+)/);
+                                let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+                                let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
                                 
-                                // 🔥 核心邏輯：翻轉黑方分數，確保所有正負數皆以「白方視角」呈現
-                                if (game.turn() === 'b') scoreVal = -scoreVal;
+                                if (rankMatch && scoreMatch && pvMatch) {
+                                    let rank = parseInt(rankMatch[1], 10);
+                                    let bestUci = pvMatch[1];
+                                    let scoreType = scoreMatch[1];
+                                    let scoreVal = parseInt(scoreMatch[2], 10);
+                                    
+                                    if (game.turn() === 'b') scoreVal = -scoreVal;
 
-                                let scoreStr = scoreType === 'mate' ? 
-                                    (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
-                                    (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
+                                    let scoreStr = scoreType === 'mate' ? 
+                                        (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
+                                        (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
 
-                                let tempGame = new Chess(game.fen());
-                                let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
-                                let san = moveObj ? moveObj.san : bestUci;
+                                    let tempGame = new Chess(game.fen());
+                                    let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
+                                    let san = moveObj ? moveObj.san : bestUci;
 
-                                currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
-                            }
-                        });
-                        renderMultiPvUI();
-                    },
-                    error: function() {
-                        $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
-                    }
-                });
+                                    currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
+                                }
+                            });
+                            renderMultiPvUI();
+                        },
+                        error: function(jqXHR, textStatus) {
+                            currentAjaxRequest = null;
+                            // 如果是我們自己手動腰斬的，不用顯示紅字錯誤
+                            if (textStatus === 'abort') return; 
+                            
+                            $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
+                        }
+                    });
+                }, 400); 
             }
 
             const sounds = {
