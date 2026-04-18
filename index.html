@@ -29,6 +29,9 @@
         .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; }
         .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
         .loading { color: #aaa; font-style: italic; text-align: center; padding: 10px; }
+        
+        /* 強化選取框的樣式 */
+        .highlight-square { box-shadow: inset 0 0 0 4px rgba(245, 245, 0, 0.8) !important; background-color: rgba(245, 245, 0, 0.3) !important; }
     </style>
 </head>
 <body>
@@ -83,6 +86,7 @@
         $(document).ready(function() {
             var board = null, game = new Chess(), moveHistory = [], redoStack = [];
             var analysisTimeout = null, currentAjaxRequest = null, currentArrowUci = null, currentMultiPV = [];
+            var clickedSquare = null;
 
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
@@ -110,7 +114,6 @@
                     let fen = game.fen();
                     let multipv = $('#turbo-toggle').is(':checked') ? 1 : 3;
                     
-                    // 第一階段：Lichess 大師庫
                     fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=${multipv}`)
                         .then(res => res.json())
                         .then(data => {
@@ -164,6 +167,7 @@
                 $('#arrow-group').empty();
                 if (!uci || game.game_over()) return;
                 let s = $('.square-'+uci.substring(0,2)), e = $('.square-'+uci.substring(2,4)), w = $('#board-wrapper').offset();
+                if (s.length === 0 || e.length === 0) return;
                 let sx = s.offset().left-w.left+s.width()/2, sy = s.offset().top-w.top+s.height()/2;
                 let ex = e.offset().left-w.left+e.width()/2, ey = e.offset().top-w.top+e.height()/2;
                 let l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -172,19 +176,134 @@
                 $('#arrow-group').append(l);
             }
 
-            board = Chessboard('board', {
+            function updateUI() {
+                var color = (game.turn() === 'w') ? '白方' : '黑方';
+                if (game.game_over()) {
+                    $('#status').html('<span style="color:#d32f2f;">遊戲結束</span>');
+                    drawArrow(null); 
+                } else {
+                    $('#status').html(color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(將軍)</span>' : ''));
+                    drawArrow(null);
+                }
+            }
+
+            // --- 拖曳移動的處理 ---
+            var config = {
                 draggable: true, position: 'start',
                 pieceTheme: (p) => `https://images.chesscomfiles.com/chess-themes/pieces/neo/150/${p.toLowerCase()}.png`,
+                onDragStart: (source, piece) => {
+                    if (game.game_over()) return false;
+                    if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+                },
                 onDrop: (source, target) => {
-                    let m = game.move({ from: source, to: target, promotion: 'q' });
-                    if (m === null) return 'snapback';
-                    moveHistory.push({ san: m.san, score: '...' });
-                    board.position(game.fen());
+                    var move = game.move({ from: source, to: target, promotion: 'q' });
+                    if (move === null) return 'snapback';
+
+                    redoStack = [];
+                    $('.highlight-square').removeClass('highlight-square');
+                    clickedSquare = null;
+                    
+                    updateUI();
+                    moveHistory.push({ san: move.san, score: '...' });
+                    renderHistory();
                     requestAnalysis();
+                },
+                // 🛑 殘影殺手：拖曳放下後，瞬間重繪防止動畫殘影
+                onSnapEnd: () => {
+                    board.position(game.fen(), false);
                 }
+            };
+            board = Chessboard('board', config);
+
+            // --- 🛑 點按移動的「強制攔截」處理 ---
+            var boardEl = document.getElementById('board');
+            var lastTapTime = 0;
+
+            function handleTapMove(e) {
+                if (e.type === 'touchstart') lastTapTime = Date.now();
+                else if (Date.now() - lastTapTime < 100) return;
+
+                if (game.game_over()) return;
+
+                var target = e.target;
+                var squareEl = target.closest ? target.closest('.square-55d63') : null;
+                if (!squareEl && target.classList && target.classList.contains('square-55d63')) squareEl = target;
+                if (!squareEl && target.parentNode && target.parentNode.classList && target.parentNode.classList.contains('square-55d63')) squareEl = target.parentNode;
+
+                if (!squareEl) return;
+
+                var square = squareEl.getAttribute('data-square');
+                var pieceObj = game.get(square);
+
+                // 1. 選取棋子
+                if (clickedSquare === null) {
+                    if (pieceObj && pieceObj.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $(squareEl).addClass('highlight-square');
+                    }
+                    return;
+                }
+
+                // 2. 嘗試移動
+                var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+
+                if (move === null) {
+                    // 如果點到自己的其他棋子，改為選取新棋子
+                    if (pieceObj && pieceObj.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $(squareEl).addClass('highlight-square');
+                    } else {
+                        clickedSquare = null;
+                        $('.highlight-square').removeClass('highlight-square');
+                    }
+                    return;
+                }
+
+                // 3. 成功移動！強制中斷事件，防止 chessboard.js 誤判為拖曳
+                e.stopPropagation();
+                e.preventDefault();
+
+                clickedSquare = null;
+                $('.highlight-square').removeClass('highlight-square');
+                redoStack = [];
+
+                // 🛑 殘影殺手：強制關閉動畫，瞬間精準更新
+                board.position(game.fen(), false);
+                updateUI();
+
+                moveHistory.push({ san: move.san, score: '...' });
+                renderHistory();
+                requestAnalysis();
+            }
+
+            // 掛載在 Capture Phase，比 chessboard.js 更早攔截事件
+            boardEl.addEventListener('mousedown', handleTapMove, true);
+            boardEl.addEventListener('touchstart', handleTapMove, {capture: true, passive: false});
+
+
+            function renderHistory() {
+                let html = '';
+                for (let i = 0; i < moveHistory.length; i += 2) {
+                    let wM = moveHistory[i], bM = moveHistory[i + 1], num = Math.floor(i / 2) + 1;
+                    let wH = `<span class="eval-tag" style="color:#666">${wM.score}</span>`;
+                    let bH = bM ? `<span class="eval-tag" style="color:#666">${bM.score}</span>` : '';
+                    html += `<tr><td style="color:#bbb; font-weight:bold">${num}.</td><td><b>${wM.san}</b> ${wH}</td><td>${bM ? `<b>${bM.san}</b> ${bH}` : ''}</td></tr>`;
+                }
+                $('#history-body').html(html);
+                $('.history-container').animate({ scrollTop: $('.history-container')[0].scrollHeight }, 50);
+            }
+
+            $('#undo-btn').on('click', () => { 
+                var undoneMove = game.undo(); 
+                if(!undoneMove) return;
+                var item = moveHistory.pop();
+                redoStack.push({ move: undoneMove, historyItem: item });
+                board.position(game.fen(), false); 
+                updateUI(); renderHistory(); requestAnalysis(); 
             });
 
-            $('#undo-btn').on('click', () => { game.undo(); moveHistory.pop(); board.position(game.fen()); requestAnalysis(); });
             $('#turbo-toggle').on('change', requestAnalysis);
             $(window).resize(() => board.resize());
             requestAnalysis();
