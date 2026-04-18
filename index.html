@@ -16,11 +16,8 @@
         #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
         #board-wrapper { position: relative; width: 480px; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
         #board { width: 100%; height: 100%; }
-        
-        /* 穿透棋子圖片，確保點到格子 */
         .piece-417db { pointer-events: none; }
         .square-55d63 { cursor: pointer; }
-
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         .side-panel { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 480px; height: 480px; }
         .info-card { background: var(--panel-bg); padding: 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
@@ -67,17 +64,16 @@
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center;">
                         <label class="btn-action btn-turbo">
-                            <input type="checkbox" id="turbo-toggle">單一
+                            <input type="checkbox" id="turbo-toggle"> ⚡ 極速
                         </label>
                         <button class="btn-action" id="import-btn">匯入</button>
                         <button class="btn-action" id="flip-btn">翻轉</button>
                         <button class="btn-action" id="undo-btn">悔棋</button>
                     </div>
                 </div>
-                <div id="opening-info" style="margin-top:10px; color:#0056b3; font-weight:bold;"></div>
                 <div class="suggestion-box">
-                    <p id="engine-label" style="margin: 12px 0 10px 0; font-size: 0.85rem; color: #999;">等待分析...</p>
-                    <div id="engine-suggestions"><div class="loading">正在請求連線...</div></div>
+                    <p id="engine-label" style="margin: 12px 0 10px 0; font-size: 0.85rem; color: #999;">可用鍵盤左右鍵控制</p>
+                    <div id="engine-suggestions"><div class="loading">等待中...</div></div>
                 </div>
             </div>
             <div class="history-container">
@@ -92,16 +88,16 @@
 
     <script>
         $(document).ready(function() {
-            var board = null, game = new Chess(), moveHistory = [];
+            var board = null, game = new Chess(), fullHistory = [];
             var analysisTimeout = null, currentAjaxRequest = null, currentMultiPV = [];
             var clickedSquare = null;
 
-            // 音效資源
             const audioMove = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3');
             const audioCapture = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3');
             const audioCheck = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3');
 
             function playSound(move) {
+                if (!move) return;
                 if (game.in_check()) audioCheck.play().catch(()=>{});
                 else if (move.captured) audioCapture.play().catch(()=>{});
                 else audioMove.play().catch(()=>{});
@@ -126,8 +122,7 @@
 
             function requestAnalysis() {
                 currentMultiPV = [];
-                $('#engine-suggestions').html('<div class="loading">🔍 翻閱大師庫中...</div>');
-                
+                $('#engine-suggestions').html('<div class="loading">🔍 分析中...</div>');
                 if (analysisTimeout) clearTimeout(analysisTimeout);
                 if (currentAjaxRequest) currentAjaxRequest.abort();
 
@@ -139,13 +134,12 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.moves && data.moves.length > 0 && (data.moves[0].white + data.moves[0].draws + data.moves[0].black) > 10) {
-                            $('#engine-label').text('📖 Lichess 大師開局庫 (秒殺)');
+                            $('#engine-label').text('📖 Lichess 大師開局庫');
                             currentMultiPV = data.moves.map((m, i) => ({
                                 rank: i+1, san: m.san, uci: m.uci,
                                 scoreStr: `W:${((m.white/(m.white+m.draws+m.black))*100).toFixed(0)}% D:${((m.draws/(m.white+m.draws+m.black))*100).toFixed(0)}%`
                             }));
                             renderMultiPvUI();
-                            $('#current-eval-score').text('📖 譜手').css('color', '#0056b3');
                         } else {
                             analysisTimeout = setTimeout(() => callColabEngine(fen, multipv), 400);
                         }
@@ -217,7 +211,7 @@
                     if (move === null) return 'snapback';
                     playSound(move);
                     updateUI();
-                    moveHistory.push({ san: move.san });
+                    fullHistory = game.history(); // 更新完整歷史
                     renderHistory();
                     requestAnalysis();
                 },
@@ -228,7 +222,6 @@
                 if (game.game_over()) return;
                 var square = $(this).attr('data-square');
                 var piece = game.get(square);
-
                 if (clickedSquare === null) {
                     if (piece && piece.color === game.turn()) {
                         clickedSquare = square;
@@ -236,27 +229,46 @@
                         $(this).addClass('highlight-square');
                     }
                 } else {
-                    if (clickedSquare === square) {
+                    var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                    if (move) {
                         clickedSquare = null;
                         $('.highlight-square').removeClass('highlight-square');
+                        board.position(game.fen());
+                        playSound(move);
+                        updateUI();
+                        fullHistory = game.history();
+                        renderHistory();
+                        requestAnalysis();
                     } else if (piece && piece.color === game.turn()) {
                         clickedSquare = square;
                         $('.highlight-square').removeClass('highlight-square');
                         $(this).addClass('highlight-square');
                     } else {
-                        var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                        clickedSquare = null;
+                        $('.highlight-square').removeClass('highlight-square');
+                    }
+                }
+            });
+
+            // 🚨 鍵盤事件：僅控制上一動與下一動
+            $(document).keydown(function(e) {
+                if (e.keyCode == 37) { // 左鍵：上一動
+                    game.undo();
+                    board.position(game.fen());
+                    updateUI();
+                    renderHistory();
+                    requestAnalysis();
+                } else if (e.keyCode == 39) { // 右鍵：下一動 (從 fullHistory 找回)
+                    let currentHistory = game.history();
+                    if (currentHistory.length < fullHistory.length) {
+                        let nextMove = fullHistory[currentHistory.length];
+                        let move = game.move(nextMove);
                         if (move) {
-                            clickedSquare = null;
-                            $('.highlight-square').removeClass('highlight-square');
                             board.position(game.fen());
                             playSound(move);
                             updateUI();
-                            moveHistory.push({ san: move.san });
                             renderHistory();
                             requestAnalysis();
-                        } else {
-                            clickedSquare = null;
-                            $('.highlight-square').removeClass('highlight-square');
                         }
                     }
                 }
@@ -264,22 +276,23 @@
 
             function renderHistory() {
                 let html = '';
-                for (let i = 0; i < moveHistory.length; i += 2) {
-                    let wM = moveHistory[i], bM = moveHistory[i + 1], num = Math.floor(i / 2) + 1;
-                    html += `<tr><td style="color:#bbb; font-weight:bold">${num}.</td><td><b>${wM.san}</b></td><td>${bM ? `<b>${bM.san}</b>` : ''}</td></tr>`;
+                let hist = game.history();
+                for (let i = 0; i < hist.length; i += 2) {
+                    let wM = hist[i], bM = hist[i + 1], num = Math.floor(i / 2) + 1;
+                    html += `<tr><td style="color:#bbb; font-weight:bold">${num}.</td><td><b>${wM}</b></td><td>${bM ? `<b>${bM}</b>` : ''}</td></tr>`;
                 }
                 $('#history-body').html(html);
                 $('.history-container').scrollTop($('.history-container')[0].scrollHeight);
             }
 
-            $('#undo-btn').on('click', () => { game.undo(); moveHistory.pop(); board.position(game.fen()); updateUI(); renderHistory(); requestAnalysis(); });
+            $('#undo-btn').on('click', () => { game.undo(); board.position(game.fen()); updateUI(); renderHistory(); requestAnalysis(); });
             $('#flip-btn').on('click', () => { board.flip(); });
             $('#turbo-toggle').on('change', requestAnalysis);
             $('#import-btn').on('click', () => {
                 let input = prompt("貼上 PGN 或 FEN：");
                 if (input && (game.load(input) || game.load_pgn(input))) {
-                    board.position(game.fen()); moveHistory = []; 
-                    game.history({verbose: true}).forEach(m => moveHistory.push({san: m.san}));
+                    board.position(game.fen()); 
+                    fullHistory = game.history();
                     renderHistory(); updateUI(); requestAnalysis();
                 }
             });
