@@ -16,6 +16,11 @@
         #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
         #board-wrapper { position: relative; width: 480px; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
         #board { width: 100%; height: 100%; }
+        
+        /* 🚨 關鍵修正：讓棋子圖片不阻擋點擊事件，確保能點到格子 */
+        .piece-417db { pointer-events: none; }
+        .square-55d63 { cursor: pointer; }
+
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         .side-panel { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 480px; height: 480px; }
         .info-card { background: var(--panel-bg); padding: 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
@@ -24,23 +29,16 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
         .eval-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; }
         .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; font-size: 0.85rem;}
-        .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; }
         .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
         .loading { color: #aaa; font-style: italic; text-align: center; padding: 10px; }
-        
         .highlight-square { box-shadow: inset 0 0 0 4px rgba(245, 245, 0, 0.8) !important; background-color: rgba(245, 245, 0, 0.3) !important; }
 
         @media (max-width: 900px) {
-            body { padding: 10px; }
-            .main-container { flex-direction: column; align-items: center; gap: 15px; }
-            .board-and-eval { width: 100%; max-width: 500px; height: auto; justify-content: center; }
-            #board-wrapper { width: calc(100vw - 60px); max-width: 450px; }
-            #eval-bar { height: calc(100vw - 60px); max-height: 450px; }
-            .side-panel { width: 100%; max-width: 500px; height: auto; }
-            .info-card > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 12px; }
-            .info-card > div:first-child > div:last-child { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
-            .btn-action { flex-grow: 1; text-align: center; justify-content: center; } 
-            .history-container { height: 250px; } 
+            .main-container { flex-direction: column; align-items: center; }
+            #board-wrapper, #eval-bar { width: 90vw; height: 90vw; max-width: 450px; max-height: 450px; }
+            .board-and-eval { flex-direction: column; height: auto; }
+            #eval-bar { width: 100%; height: 20px; flex-direction: row; justify-content: flex-start; }
+            #eval-fill { height: 100%; width: 50%; }
         }
     </style>
 </head>
@@ -68,12 +66,9 @@
                         <span id="current-eval-score" class="score-badge">0.00</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <label class="btn-action btn-turbo">
-                            <input type="checkbox" id="turbo-toggle"> 單一
-                        </label>
-                        <button class="btn-action" id="import-btn"> 匯入 PGN</button>
-                        <button class="btn-action" id="flip-btn"> 翻轉</button>
-                        <button class="btn-action" id="undo-btn"> 悔棋</button>
+                        <button class="btn-action" id="import-btn">匯入 PGN</button>
+                        <button class="btn-action" id="flip-btn">翻轉</button>
+                        <button class="btn-action" id="undo-btn">悔棋</button>
                     </div>
                 </div>
                 <div id="opening-info" style="margin-top:10px; color:#0056b3; font-weight:bold;"></div>
@@ -95,8 +90,19 @@
     <script>
         $(document).ready(function() {
             var board = null, game = new Chess(), moveHistory = [];
-            var analysisTimeout = null, currentAjaxRequest = null, currentArrowUci = null, currentMultiPV = [];
+            var analysisTimeout = null, currentAjaxRequest = null, currentMultiPV = [];
             var clickedSquare = null;
+
+            // --- 音效資源 ---
+            const audioMove = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3');
+            const audioCapture = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3');
+            const audioCheck = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3');
+
+            function playSound(move) {
+                if (game.in_check()) audioCheck.play().catch(()=>{});
+                else if (move.captured) audioCapture.play().catch(()=>{});
+                else audioMove.play().catch(()=>{});
+            }
 
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
@@ -117,34 +123,38 @@
             function requestAnalysis() {
                 currentMultiPV = [];
                 $('#engine-suggestions').html('<div class="loading">🔍 翻閱大師庫中...</div>');
+                
+                // 🚨 關鍵優化：先清除所有進行中的運算，避免計算重疊
                 if (analysisTimeout) clearTimeout(analysisTimeout);
                 if (currentAjaxRequest) currentAjaxRequest.abort();
 
-                analysisTimeout = setTimeout(() => {
-                    let fen = game.fen();
-                    let multipv = $('#turbo-toggle').is(':checked') ? 1 : 3;
-                    
-                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=${multipv}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.moves && data.moves.length > 0 && (data.moves[0].white + data.moves[0].draws + data.moves[0].black) > 10) {
-                                $('#engine-label').text('📖 Lichess 大師開局庫 (秒殺)');
-                                currentMultiPV = data.moves.map((m, i) => ({
-                                    rank: i+1, san: m.san, uci: m.uci,
-                                    scoreStr: `W:${((m.white/(m.white+m.draws+m.black))*100).toFixed(0)}% D:${((m.draws/(m.white+m.draws+m.black))*100).toFixed(0)}%`
-                                }));
-                                renderMultiPvUI();
-                                $('#current-eval-score').text('📖 譜手').css('color', '#0056b3');
-                            } else {
-                                callColabEngine(fen, multipv);
-                            }
-                        }).catch(() => callColabEngine(fen, multipv));
-                }, 400);
+                let fen = game.fen();
+                
+                // 優先檢查 Lichess 開局庫
+                fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=3`)
+                    .then(res => res.json())
+                    .then(data => {
+                        // 如果有大師對局數據且數量足夠
+                        if (data.moves && data.moves.length > 0 && (data.moves[0].white + data.moves[0].draws + data.moves[0].black) > 10) {
+                            $('#engine-label').text('📖 Lichess 大師開局庫 (秒殺)');
+                            currentMultiPV = data.moves.map((m, i) => ({
+                                rank: i+1, san: m.san, uci: m.uci,
+                                scoreStr: `W:${((m.white/(m.white+m.draws+m.black))*100).toFixed(0)}% D:${((m.draws/(m.white+m.draws+m.black))*100).toFixed(0)}%`
+                            }));
+                            renderMultiPvUI();
+                            $('#current-eval-score').text('📖 譜手').css('color', '#0056b3');
+                        } else {
+                            // 進入無資料領域，400ms 後喚醒 Stockfish
+                            analysisTimeout = setTimeout(() => callColabEngine(fen, 3), 400);
+                        }
+                    }).catch(() => {
+                        analysisTimeout = setTimeout(() => callColabEngine(fen, 3), 400);
+                    });
             }
 
             function callColabEngine(fen, multipv) {
                 $('#engine-label').text('Stockfish 計算中');
-                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; // 確保這裡的 ngrok 網址是最新有效的
+                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev";
                 currentAjaxRequest = $.ajax({
                     url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(fen)}&multipv=${multipv}`,
                     method: 'GET',
@@ -188,28 +198,24 @@
 
             function updateUI() {
                 var color = (game.turn() === 'w') ? '白方' : '黑方';
-                if (game.game_over()) {
-                    $('#status').html('<span style="color:#d32f2f;">遊戲結束</span>');
-                    drawArrow(null); 
-                } else {
-                    $('#status').html(color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(check)</span>' : ''));
-                    drawArrow(null);
-                }
+                $('#status').html(game.game_over() ? '<span style="color:#d32f2f;">遊戲結束</span>' : color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(將軍)</span>' : ''));
+                drawArrow(null);
             }
 
-            // --- 核心：初始化棋盤 ---
+            // --- 初始化棋盤 ---
             board = Chessboard('board', {
                 draggable: true, position: 'start',
                 pieceTheme: (p) => `https://images.chesscomfiles.com/chess-themes/pieces/neo/150/${p.toLowerCase()}.png`,
                 onDragStart: (source, piece) => {
                     if (game.game_over()) return false;
                     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+                    $('.highlight-square').removeClass('highlight-square');
+                    clickedSquare = null;
                 },
                 onDrop: (source, target) => {
                     var move = game.move({ from: source, to: target, promotion: 'q' });
                     if (move === null) return 'snapback';
-                    $('.highlight-square').removeClass('highlight-square');
-                    clickedSquare = null;
+                    playSound(move);
                     updateUI();
                     moveHistory.push({ san: move.san, score: '...' });
                     renderHistory();
@@ -218,63 +224,42 @@
                 onSnapEnd: () => { board.position(game.fen()); }
             });
 
-            // --- 核心：處理兩步點擊移動 (修正被棋子遮擋的 Bug) ---
-            var touchStartX, touchStartY;
-            $('#board').on('mousedown touchstart', '.square-55d63, .piece-417db', function(e) {
-                var evt = e.originalEvent.touches ? e.originalEvent.touches[0] : e;
-                touchStartX = evt.clientX; touchStartY = evt.clientY;
-            });
+            // --- 🚨 終極點擊修復：直接針對格子監聽點擊事件 ---
+            $('#board').on('click', '.square-55d63', function() {
+                if (game.game_over()) return;
+                var square = $(this).attr('data-square');
+                var piece = game.get(square);
 
-            $('#board').on('mouseup touchend', '.square-55d63, .piece-417db', function(e) {
-                var evt = e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : e;
-                var dx = Math.abs(evt.clientX - touchStartX);
-                var dy = Math.abs(evt.clientY - touchStartY);
-
-                // 確認是單純的「點擊」而不是「拖曳」
-                if (dx < 5 && dy < 5) {
-                    if (game.game_over()) return;
-
-                    var square = $(this).attr('data-square');
-                    if (!square) return; // 確保有抓到座標
-
-                    var pieceObj = game.get(square);
-
-                    if (clickedSquare === null) {
-                        // 狀態 1：選取棋子
-                        if (pieceObj && pieceObj.color === game.turn()) {
-                            clickedSquare = square;
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.square-' + square).addClass('highlight-square'); // 針對底層格子發光
-                        }
+                if (clickedSquare === null) {
+                    // 第一次點擊：如果是自己的棋子，就選取
+                    if (piece && piece.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $(this).addClass('highlight-square');
+                    }
+                } else {
+                    // 第二次點擊：嘗試移動
+                    if (clickedSquare === square) {
+                        clickedSquare = null;
+                        $('.highlight-square').removeClass('highlight-square');
+                    } else if (piece && piece.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $(this).addClass('highlight-square');
                     } else {
-                        // 狀態 2：已有選取目標
-                        if (clickedSquare === square) {
-                            // 點同一個地方 -> 取消選取
+                        var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                        if (move) {
                             clickedSquare = null;
                             $('.highlight-square').removeClass('highlight-square');
-                        } else if (pieceObj && pieceObj.color === game.turn()) {
-                            // 點自己的其他棋子 -> 切換選取
-                            clickedSquare = square;
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.square-' + square).addClass('highlight-square');
+                            board.position(game.fen());
+                            playSound(move);
+                            updateUI();
+                            moveHistory.push({ san: move.san, score: '...' });
+                            renderHistory();
+                            requestAnalysis();
                         } else {
-                            // 點擊空白處或敵方 -> 嘗試移動
-                            var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-                            if (move) {
-                                clickedSquare = null;
-                                $('.highlight-square').removeClass('highlight-square');
-                                board.position(game.fen(), false);
-
-                                playSound(move); 
-                                updateUI();
-                                moveHistory.push({ san: move.san, score: '...' });
-                                renderHistory();
-                                requestAnalysis();
-                            } else {
-                                // 違規移動 (例如馬走直線) -> 取消選取
-                                clickedSquare = null;
-                                $('.highlight-square').removeClass('highlight-square');
-                            }
+                            clickedSquare = null;
+                            $('.highlight-square').removeClass('highlight-square');
                         }
                     }
                 }
@@ -284,61 +269,21 @@
                 let html = '';
                 for (let i = 0; i < moveHistory.length; i += 2) {
                     let wM = moveHistory[i], bM = moveHistory[i + 1], num = Math.floor(i / 2) + 1;
-                    let wH = `<span class="eval-tag" style="color:#666">${wM.score}</span>`;
-                    let bH = bM ? `<span class="eval-tag" style="color:#666">${bM.score}</span>` : '';
-                    html += `<tr><td style="color:#bbb; font-weight:bold">${num}.</td><td><b>${wM.san}</b> ${wH}</td><td>${bM ? `<b>${bM.san}</b> ${bH}` : ''}</td></tr>`;
+                    html += `<tr><td style="color:#bbb; font-weight:bold">${num}.</td><td><b>${wM.san}</b></td><td>${bM ? `<b>${bM.san}</b>` : ''}</td></tr>`;
                 }
                 $('#history-body').html(html);
-                $('.history-container').animate({ scrollTop: $('.history-container')[0].scrollHeight }, 50);
+                $('.history-container').scrollTop($('.history-container')[0].scrollHeight);
             }
 
-            // --- 事件綁定區域 ---
-            $('#undo-btn').on('click', () => { 
-                game.undo(); moveHistory.pop(); board.position(game.fen(), false); updateUI(); renderHistory(); requestAnalysis(); 
-            });
-            $('#turbo-toggle').on('change', requestAnalysis);
-            $(window).resize(() => board.resize());
-            
-            // 【新增】綁定「翻轉」按鈕功能
-            $('#flip-btn').on('click', () => { 
-                board.flip(); // 呼叫 chessboard.js 內建的翻轉功能
-                
-                // 棋盤翻轉後，SVG 箭頭的座標會跑掉，所以要重新畫一次最佳路徑
-                if (currentMultiPV.length > 0 && currentMultiPV[0].uci) {
-                    drawArrow(currentMultiPV[0].uci);
-                }
-            });
-
-            // 【新增】綁定「匯入 PGN / FEN」按鈕功能
+            $('#undo-btn').on('click', () => { game.undo(); moveHistory.pop(); board.position(game.fen()); updateUI(); renderHistory(); requestAnalysis(); });
+            $('#flip-btn').on('click', () => { board.flip(); });
             $('#import-btn').on('click', () => {
-                let input = prompt("📥 請貼上 PGN 或是 FEN 格式的棋局紀錄：\n（例如：rnbqkbnr/pppppppp/8/...）");
-                if (!input) return; // 如果使用者按取消或沒有輸入就跳出
-
-                let success = false;
-                // 簡單判斷輸入的是 FEN 還是 PGN
-                if (input.indexOf(' ') !== -1 && input.indexOf('/') !== -1 && input.length < 100) {
-                    success = game.load(input); // 載入 FEN 格式
-                } else {
-                    success = game.load_pgn(input); // 載入 PGN 格式
-                }
-
-                if (success) {
-                    board.position(game.fen()); // 更新前端棋盤畫面
-                    moveHistory = []; // 匯入新局，清空舊的歷史紀錄
-                    
-                    // 如果是 PGN 匯入，將歷史紀錄重新解析出來放入表格
-                    let history = game.history({ verbose: true });
-                    history.forEach(m => moveHistory.push({ san: m.san, score: '...' }));
-                    
-                    renderHistory(); // 重新渲染右側表格
-                    updateUI(); // 更新回合與狀態文字
-                    requestAnalysis(); // 觸發引擎針對新盤面進行重新計算
-                } else {
-                    alert("❌ 格式錯誤，無法解析這段文字！");
+                let input = prompt("貼上 PGN 或 FEN：");
+                if (input && (game.load(input) || game.load_pgn(input))) {
+                    board.position(game.fen()); moveHistory = []; renderHistory(); updateUI(); requestAnalysis();
                 }
             });
 
-            // 初始化時先請求一次分析
             requestAnalysis();
         });
     </script>
