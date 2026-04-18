@@ -218,45 +218,63 @@
                 onSnapEnd: () => { board.position(game.fen()); }
             });
 
-            // --- 核心：處理點按移動 ---
+            // --- 核心：處理兩步點擊移動 (修正被棋子遮擋的 Bug) ---
             var touchStartX, touchStartY;
-            $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
+            $('#board').on('mousedown touchstart', '.square-55d63, .piece-417db', function(e) {
                 var evt = e.originalEvent.touches ? e.originalEvent.touches[0] : e;
                 touchStartX = evt.clientX; touchStartY = evt.clientY;
             });
 
-            $('#board').on('mouseup touchend', '.square-55d63', function(e) {
+            $('#board').on('mouseup touchend', '.square-55d63, .piece-417db', function(e) {
                 var evt = e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : e;
                 var dx = Math.abs(evt.clientX - touchStartX);
                 var dy = Math.abs(evt.clientY - touchStartY);
+
+                // 確認是單純的「點擊」而不是「拖曳」
                 if (dx < 5 && dy < 5) {
+                    if (game.game_over()) return;
+
                     var square = $(this).attr('data-square');
+                    if (!square) return; // 確保有抓到座標
+
                     var pieceObj = game.get(square);
+
                     if (clickedSquare === null) {
+                        // 狀態 1：選取棋子
                         if (pieceObj && pieceObj.color === game.turn()) {
                             clickedSquare = square;
                             $('.highlight-square').removeClass('highlight-square');
-                            $('.square-' + square).addClass('highlight-square');
+                            $('.square-' + square).addClass('highlight-square'); // 針對底層格子發光
                         }
                     } else {
-                        var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-                        if (move === null) {
-                            if (pieceObj && pieceObj.color === game.turn()) {
-                                clickedSquare = square;
+                        // 狀態 2：已有選取目標
+                        if (clickedSquare === square) {
+                            // 點同一個地方 -> 取消選取
+                            clickedSquare = null;
+                            $('.highlight-square').removeClass('highlight-square');
+                        } else if (pieceObj && pieceObj.color === game.turn()) {
+                            // 點自己的其他棋子 -> 切換選取
+                            clickedSquare = square;
+                            $('.highlight-square').removeClass('highlight-square');
+                            $('.square-' + square).addClass('highlight-square');
+                        } else {
+                            // 點擊空白處或敵方 -> 嘗試移動
+                            var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                            if (move) {
+                                clickedSquare = null;
                                 $('.highlight-square').removeClass('highlight-square');
-                                $('.square-' + square).addClass('highlight-square');
+                                board.position(game.fen(), false);
+
+                                playSound(move); 
+                                updateUI();
+                                moveHistory.push({ san: move.san, score: '...' });
+                                renderHistory();
+                                requestAnalysis();
                             } else {
+                                // 違規移動 (例如馬走直線) -> 取消選取
                                 clickedSquare = null;
                                 $('.highlight-square').removeClass('highlight-square');
                             }
-                        } else {
-                            clickedSquare = null;
-                            $('.highlight-square').removeClass('highlight-square');
-                            board.position(game.fen(), false); 
-                            updateUI();
-                            moveHistory.push({ san: move.san, score: '...' });
-                            renderHistory();
-                            requestAnalysis();
                         }
                     }
                 }
