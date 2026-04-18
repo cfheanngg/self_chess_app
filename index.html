@@ -10,61 +10,25 @@
         body { font-family: 'Segoe UI', "Microsoft JhengHei", Tahoma, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; box-sizing: border-box;}
         h2 { margin-top: 0; margin-bottom: 20px; color: #333; }
         .main-container { display: flex; flex-direction: row; gap: 15px; width: 100%; max-width: 1100px; justify-content: center; align-items: flex-start; }
-        
         .board-and-eval { display: flex; gap: 12px; align-items: stretch; height: 480px; }
-        #eval-bar { width: 24px; background-color: #404040; border: 2px solid #dcdcdc; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.05); position: relative;}
-        #eval-bar::after { content: ''; position: absolute; top: calc(50% - 1px); left: 0; right: 0; height: 2px; background-color: rgba(255, 0, 0, 0.7); z-index: 10; pointer-events: none;}
+        #eval-bar { width: 24px; background-color: #404040; border: 2px solid #dcdcdc; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; position: relative;}
+        #eval-bar::after { content: ''; position: absolute; top: calc(50% - 1px); left: 0; right: 0; height: 2px; background-color: rgba(255, 0, 0, 0.7); z-index: 10; }
         #eval-fill { width: 100%; height: 50%; background-color: #ffffff; transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
-        
-        #board-wrapper { position: relative; width: 480px; max-width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); touch-action: none; }
+        #board-wrapper { position: relative; width: 480px; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
         #board { width: 100%; height: 100%; }
         #arrow-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-
         .side-panel { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 480px; height: 480px; }
         .info-card { background: var(--panel-bg); padding: 18px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-        .opening-name { margin-top: 10px; font-size: 0.95rem; color: var(--accent-blue); font-weight: bold; min-height: 24px; display: flex; align-items: center; gap: 8px; }
-        .opening-eco { background: #e0eaf5; color: #004085; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-family: 'Courier New', Courier, monospace; }
-        .score-badge { font-size: 1.1rem; font-weight: bold; padding: 2px 8px; border-radius: 6px; background: #f0f0f5; border: 1px solid #e0e0e0; transition: color 0.3s;}
-
-        .history-container { flex-grow: 1; overflow-y: auto; background: var(--panel-bg); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 15px; }
+        .score-badge { font-size: 1.1rem; font-weight: bold; padding: 2px 8px; border-radius: 6px; background: #f0f0f5; border: 1px solid #e0e0e0; }
+        .history-container { flex-grow: 1; overflow-y: auto; background: var(--panel-bg); border-radius: 12px; padding: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-        th { color: #888; border-bottom: 2px solid #eee; padding: 0 4px 8px 4px; text-align: left; }
-        td { padding: 8px 4px; border-bottom: 1px solid #f9f9f9; width: 40%; }
-        td.num-col { width: 20%; color: #bbb; font-weight: bold; }
-        .eval-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; font-weight: normal; }
+        .eval-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; }
         .score-pos { background: #e8f5e9; color: #2e7d32; }
         .score-neg { background: #ffebee; color: #c62828; }
-        .score-wait { background: #f0f0f0; color: #aaa; font-style: italic; }
-
-        .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; transition: all 0.2s; font-size: 0.85rem;}
-        .btn-action:hover { background: #f5f5f5; border-color: #bbb; }
-        
-        .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; margin: 0; }
-        .btn-turbo:hover { background: #ffebee; border-color: #ef9a9a; }
-
-        .suggestion-box { border-top: 1px solid #f0f0f0; padding-top: 12px; margin-top: 12px; }
+        .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; font-size: 0.85rem;}
+        .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; }
         .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
-        .rank { font-weight: bold; color: #bbb; width: 25px;}
-        .best-move { color: var(--accent-blue); font-weight: bold; flex-grow: 1; margin-left: 8px; }
         .loading { color: #aaa; font-style: italic; text-align: center; padding: 10px; }
-        .highlight-square { box-shadow: inset 0 0 0 4px rgba(245, 245, 0, 0.8) !important; background-color: rgba(245, 245, 0, 0.3) !important; }
-
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-box { background: var(--panel-bg); padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-        .modal-box h3 { margin-top: 0; margin-bottom: 15px; color: #333; }
-        .modal-box textarea { width: 100%; height: 180px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: monospace; resize: vertical; margin-bottom: 15px; }
-        .modal-btn-group { display: flex; justify-content: flex-end; gap: 10px; }
-        .btn-primary { background: var(--accent-blue); color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;}
-        .btn-primary:hover { background: #004494; }
-
-        @media (max-width: 900px) {
-            .main-container { flex-direction: column; align-items: center; }
-            .board-and-eval { width: 95vw; height: auto; justify-content: center; }
-            #board-wrapper { width: calc(95vw - 40px); }
-            #eval-bar { height: auto; }
-            .side-panel { height: auto; max-width: 95vw; }
-            .history-container { height: 280px; }
-        }
     </style>
 </head>
 <body>
@@ -88,36 +52,25 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; align-items: baseline; gap: 10px;">
                         <span id="status" style="font-weight: bold; font-size: 1.1rem;">白方回合</span>
-                        <span id="current-eval-score" class="score-badge" style="color:#888;">0.00</span>
+                        <span id="current-eval-score" class="score-badge">0.00</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <label class="btn-action btn-turbo">
-                            <input type="checkbox" id="turbo-toggle" style="margin: 0; cursor: pointer;"> ⚡ 極速
+                            <input type="checkbox" id="turbo-toggle"> ⚡ 極速
                         </label>
                         <button class="btn-action" id="import-btn">📥 匯入</button>
                         <button class="btn-action" id="flip-btn">🔄 翻轉</button>
                         <button class="btn-action" id="undo-btn">⬅ 悔棋</button>
                     </div>
                 </div>
-                <div id="opening-info" class="opening-name"><span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span></div>
+                <div id="opening-info" style="margin-top:10px; color:#0056b3; font-weight:bold;"></div>
                 <div class="suggestion-box">
-                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #999; letter-spacing: 0.5px;">Colab 雲端大腦 (最佳著法推薦)</p>
+                    <p id="engine-label" style="margin: 12px 0 10px 0; font-size: 0.85rem; color: #999;">等待分析...</p>
                     <div id="engine-suggestions"><div class="loading">正在請求連線...</div></div>
                 </div>
             </div>
             <div class="history-container">
-                <table><thead><tr><th class="num-col">#</th><th>白方</th><th>黑方</th></tr></thead><tbody id="history-body"></tbody></table>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="pgn-modal">
-        <div class="modal-box">
-            <h3>匯入 PGN 棋譜</h3>
-            <textarea id="pgn-input" placeholder="請將 PGN 貼在此處..."></textarea>
-            <div class="modal-btn-group">
-                <button class="btn-action" id="cancel-pgn">取消</button>
-                <button class="btn-primary" id="confirm-pgn">匯入並分析</button>
+                <table><thead><tr><th>#</th><th>白方</th><th>黑方</th></tr></thead><tbody id="history-body"></tbody></table>
             </div>
         </div>
     </div>
@@ -128,422 +81,113 @@
 
     <script>
         $(document).ready(function() {
-            var board = null;
-            var game = new Chess();
-            var clickedSquare = null;
-            var moveHistory = []; 
-            var redoStack = []; 
-            var lastTouchTime = 0;
-            var currentArrowUci = null;
-            var openingTimeout = null;
-            var analysisTriggerIndex = -1;
-            var currentMultiPV = []; 
-            var lastKnownOpening = { eco: '', name: '' };
-            
-            // 💡 新增的兩個全域變數，控制防手震與請求腰斬
-            var analysisTimeout = null;
-            var currentAjaxRequest = null;
-            
+            var board = null, game = new Chess(), moveHistory = [], redoStack = [];
+            var analysisTimeout = null, currentAjaxRequest = null, currentArrowUci = null, currentMultiPV = [];
+
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
-                
                 let html = '';
                 currentMultiPV.forEach(item => {
-                    if (!item) return;
-                    let colorClass = parseFloat(item.scoreStr) >= 0 ? '#2e7d32' : '#c62828';
-                    if (item.scoreStr.includes('M-')) colorClass = '#c62828';
-                    if (item.scoreStr.includes('M+')) colorClass = '#2e7d32';
-                    if (item.scoreStr === '0.00' || item.scoreStr === '+0.00') colorClass = '#666666';
-                    
-                    html += `
-                        <div class="move-row">
-                            <span class="rank">#${item.rank}</span>
-                            <span class="best-move">${item.san}</span>
-                            <span class="score" style="color: ${colorClass}">${item.scoreStr}</span>
-                        </div>
-                    `;
+                    let color = parseFloat(item.scoreStr) >= 0 ? '#2e7d32' : '#c62828';
+                    html += `<div class="move-row"><b>#${item.rank}</b> <span style="color:#0056b3">${item.san}</span> <span style="color:${color}">${item.scoreStr}</span></div>`;
                 });
-                
                 $('#engine-suggestions').html(html);
-
-                let topMove = currentMultiPV[0];
-                if (topMove) {
-                    drawArrow(topMove.uci);
-                    updateEvalBar(topMove.scoreStr);
-                    
-                    let colorClass = parseFloat(topMove.scoreStr) >= 0 ? '#2e7d32' : '#c62828';
-                    if (topMove.scoreStr.includes('M-')) colorClass = '#c62828';
-                    if (topMove.scoreStr.includes('M+')) colorClass = '#2e7d32';
-                    if (topMove.scoreStr === '0.00' || topMove.scoreStr === '+0.00') colorClass = '#666666';
-                    $('#current-eval-score').text(topMove.scoreStr).css('color', colorClass);
-                    
-                    if (analysisTriggerIndex >= 0 && moveHistory[analysisTriggerIndex]) {
-                        moveHistory[analysisTriggerIndex].score = topMove.scoreStr;
-                        renderHistory();
-                        analysisTriggerIndex = -1; 
-                    }
+                let top = currentMultiPV[0];
+                if (top) {
+                    drawArrow(top.uci);
+                    updateEvalBar(top.scoreStr);
+                    $('#current-eval-score').text(top.scoreStr).css('color', parseFloat(top.scoreStr) >= 0 ? '#2e7d32' : '#c62828');
                 }
             }
 
-            // 💡 新增全域變數
-            var analysisTimeout = null;
-            var currentAjaxRequest = null;
-
-            // 🚀 搭載「開局庫秒殺」的兩段式分析系統
-            function requestAnalysis(triggeredByMoveIndex = -1) {
-                analysisTriggerIndex = triggeredByMoveIndex;
-                currentMultiPV = []; 
-                $('#engine-suggestions').html('<div class="loading">🔍 翻閱大師開局庫中...</div>');
-                $('#current-eval-score').text('...').css('color', '#888');
-                
+            function requestAnalysis() {
+                currentMultiPV = [];
+                $('#engine-suggestions').html('<div class="loading">🔍 翻閱大師庫中...</div>');
                 if (analysisTimeout) clearTimeout(analysisTimeout);
                 if (currentAjaxRequest) currentAjaxRequest.abort();
 
-                // ⏳ 防手震機制
                 analysisTimeout = setTimeout(() => {
                     let fen = game.fen();
-                    let currentMultiPvValue = $('#turbo-toggle').is(':checked') ? 1 : 3;
+                    let multipv = $('#turbo-toggle').is(':checked') ? 1 : 3;
                     
-                    // 🌟 第一段火箭：攔截請求，先去問 Lichess 大師庫
-                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=${currentMultiPvValue}`)
+                    // 第一階段：Lichess 大師庫
+                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=${multipv}`)
                         .then(res => res.json())
                         .then(data => {
-                            // 條件：必須在大師庫裡有紀錄，且該步至少被下過 10 次 (過濾掉超冷門爛招)
                             if (data.moves && data.moves.length > 0 && (data.moves[0].white + data.moves[0].draws + data.moves[0].black) > 10) {
-                                
-                                $('.suggestion-box p').html('📖 Lichess 大師開局庫 (毫秒級秒殺)');
-                                
-                                currentMultiPV = data.moves.map((m, index) => {
-                                    let total = m.white + m.draws + m.black;
-                                    // 為了維持統一視角，我們算出「白方勝率」與「和局率」
-                                    let wWin = ((m.white / total) * 100).toFixed(0);
-                                    let draw = ((m.draws / total) * 100).toFixed(0);
-                                    
-                                    return {
-                                        rank: index + 1,
-                                        san: m.san,
-                                        scoreStr: `W:${wWin}% D:${draw}%`, // 顯示勝率數據
-                                        uci: m.uci
-                                    };
-                                });
-                                
+                                $('#engine-label').text('📖 Lichess 大師開局庫 (秒殺)');
+                                currentMultiPV = data.moves.map((m, i) => ({
+                                    rank: i+1, san: m.san, uci: m.uci,
+                                    scoreStr: `W:${((m.white/(m.white+m.draws+m.black))*100).toFixed(0)}% D:${((m.draws/(m.white+m.draws+m.black))*100).toFixed(0)}%`
+                                }));
                                 renderMultiPvUI();
-                                
-                                // 開局庫不影響優勢條，顯示標籤
-                                $('#eval-fill').css('height', '50%');
-                                $('#current-eval-score').text('📖 主流譜').css('color', '#0056b3');
-                                
+                                $('#current-eval-score').text('📖 譜手').css('color', '#0056b3');
                             } else {
-                                // 🌟 第二段火箭：脫譜了！喚醒 Colab 大廚
-                                $('.suggestion-box p').html('Colab 極限大腦 (深度運算中...)');
-                                callColabEngine(fen, currentMultiPvValue);
+                                callColabEngine(fen, multipv);
                             }
-                        }).catch(() => {
-                            // 萬一 Lichess API 剛好當機，直接叫 Colab 出馬
-                            $('.suggestion-box p').html('Colab 極限大腦 (深度運算中...)');
-                            callColabEngine(fen, currentMultiPvValue);
-                        });
-                }, 400); 
+                        }).catch(() => callColabEngine(fen, multipv));
+                }, 400);
             }
 
-            // 🧠 負責呼叫 Colab 的苦力函數
-            function callColabEngine(fen, currentMultiPvValue) {
-                // ⚠️ 記得確保這裡的網址是你最新的 ngrok 網址
-                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; 
-                $('#engine-suggestions').html('<div class="loading">大腦狂轉中，請稍候...</div>');
-                
+            function callColabEngine(fen, multipv) {
+                $('#engine-label').text('Colab 極限大腦 (深度運算中)');
+                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev";
                 currentAjaxRequest = $.ajax({
-                    url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(fen)}&multipv=${currentMultiPvValue}`,
+                    url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(fen)}&multipv=${multipv}`,
                     method: 'GET',
                     headers: { "ngrok-skip-browser-warning": "true" },
                     success: function(data) {
-                        currentAjaxRequest = null; 
                         data.analysis.forEach((line) => {
-                            let rankMatch = line.match(/multipv (\d+)/);
-                            let scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
-                            let pvMatch = line.match(/pv ([a-h1-8]{4,5})/); 
-                            
-                            if (rankMatch && scoreMatch && pvMatch) {
-                                let rank = parseInt(rankMatch[1], 10);
-                                let bestUci = pvMatch[1];
-                                let scoreType = scoreMatch[1];
-                                let scoreVal = parseInt(scoreMatch[2], 10);
-                                
+                            let r = line.match(/multipv (\d+)/), s = line.match(/score (cp|mate) (-?\d+)/), p = line.match(/pv ([a-h1-8]{4,5})/);
+                            if (r && s && p) {
+                                let scoreVal = parseInt(s[2], 10);
                                 if (game.turn() === 'b') scoreVal = -scoreVal;
-
-                                let scoreStr = scoreType === 'mate' ? 
-                                    (scoreVal < 0 ? `M${scoreVal}` : `M+${scoreVal}`) : 
-                                    (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
-
-                                let tempGame = new Chess(game.fen());
-                                let moveObj = tempGame.move({from: bestUci.substring(0,2), to: bestUci.substring(2,4), promotion: bestUci[4]||'q'});
-                                let san = moveObj ? moveObj.san : bestUci;
-
-                                currentMultiPV[rank - 1] = { rank: rank, san: san, scoreStr: scoreStr, uci: bestUci };
+                                let scoreStr = s[1] === 'mate' ? `M${scoreVal}` : (scoreVal > 0 ? `+${(scoreVal/100).toFixed(2)}` : `${(scoreVal/100).toFixed(2)}`);
+                                let temp = new Chess(game.fen());
+                                let mObj = temp.move({from: p[1].substring(0,2), to: p[1].substring(2,4), promotion: p[1][4]||'q'});
+                                currentMultiPV[parseInt(r[1])-1] = { rank: r[1], san: mObj.san, scoreStr: scoreStr, uci: p[1] };
                             }
                         });
-                        $('.suggestion-box p').html('Colab 雲端大腦 (最佳著法推薦)');
                         renderMultiPvUI();
-                    },
-                    error: function(jqXHR, textStatus) {
-                        currentAjaxRequest = null;
-                        if (textStatus === 'abort') return; 
-                        $('#engine-suggestions').html('<div class="loading" style="color:#c62828;">⚠️ 無法連線至 Colab，請確認 Colab 正在運行。</div>');
                     }
                 });
             }
 
-            const sounds = {
-                move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3'),
-                capture: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3'),
-                check: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3'),
-                gameover: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/game-end.mp3')
-            };
-            Object.values(sounds).forEach(audio => audio.volume = 1.0);
-
-            function safePlaySound(audioObj) {
-                audioObj.currentTime = 0;
-                let playPromise = audioObj.play();
-                if (playPromise !== undefined) playPromise.catch(error => {});
+            function updateEvalBar(s) {
+                let p = 50;
+                if (s.startsWith('M')) p = s.includes('-') ? 0 : 100;
+                else p = Math.max(2, Math.min(98, 50 + (50 * (2/Math.PI) * Math.atan(parseFloat(s)/8))));
+                $('#eval-fill').css('height', p + '%');
             }
 
-            function playMoveSound(move) {
-                if (game.in_check()) safePlaySound(sounds.check);
-                else if (move.captured) safePlaySound(sounds.capture);
-                else safePlaySound(sounds.move);
+            function drawArrow(uci) {
+                $('#arrow-group').empty();
+                if (!uci || game.game_over()) return;
+                let s = $('.square-'+uci.substring(0,2)), e = $('.square-'+uci.substring(2,4)), w = $('#board-wrapper').offset();
+                let sx = s.offset().left-w.left+s.width()/2, sy = s.offset().top-w.top+s.height()/2;
+                let ex = e.offset().left-w.left+e.width()/2, ey = e.offset().top-w.top+e.height()/2;
+                let l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                l.setAttribute('x1', sx); l.setAttribute('y1', sy); l.setAttribute('x2', ex); l.setAttribute('y2', ey);
+                l.setAttribute('stroke', '#151515'); l.setAttribute('stroke-width', s.width()*0.18); l.setAttribute('marker-end', 'url(#arrowhead)'); l.setAttribute('opacity', '0.6');
+                $('#arrow-group').append(l);
             }
 
-            function detectOpening() {
-                if (game.history().length === 0) {
-                    lastKnownOpening = { eco: '', name: '' };
-                    $('#opening-info').html('<span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span>');
-                    return;
-                }
-                clearTimeout(openingTimeout);
-                openingTimeout = setTimeout(() => {
-                    let fen = game.fen();
-                    fetch(`https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0`)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data && data.opening) {
-                                lastKnownOpening = data.opening;
-                                $('#opening-info').html(`<span class="opening-eco">${data.opening.eco}</span><span>${data.opening.name}</span>`);
-                            } 
-                            else if (lastKnownOpening.name) {
-                                $('#opening-info').html(`<span class="opening-eco">${lastKnownOpening.eco}</span><span style="color:#666;">${lastKnownOpening.name} (延伸變化)</span>`);
-                            }
-                        }).catch(err => {
-                            console.error("開局庫連線失敗:", err);
-                        });
-                }, 800); 
-            }
-
-            function updateEvalBar(scoreStr) {
-                let percentage = 50; 
-                if (scoreStr === '...') return;
-                if (scoreStr.startsWith('M')) {
-                    percentage = scoreStr.includes('-') ? 0 : 100;
-                } else {
-                    let score = parseFloat(scoreStr);
-                    percentage = 50 + (50 * (2 / Math.PI) * Math.atan(score / 8));
-                    percentage = Math.max(2, Math.min(98, percentage));
-                }
-                $('#eval-fill').css('height', percentage + '%');
-            }
-
-            function getScoreClass(scoreStr) {
-                if (scoreStr === '...') return 'score-wait';
-                if (scoreStr.startsWith('M')) return scoreStr.includes('-') ? 'score-neg' : 'score-pos';
-                return parseFloat(scoreStr) >= 0 ? 'score-pos' : 'score-neg';
-            }
-
-            function renderHistory() {
-                let html = '';
-                for (let i = 0; i < moveHistory.length; i += 2) {
-                    let wMove = moveHistory[i], bMove = moveHistory[i + 1], moveNum = Math.floor(i / 2) + 1;
-                    let wHtml = `<span class="eval-tag ${getScoreClass(wMove.score)}">${wMove.score}</span>`;
-                    let bHtml = bMove ? `<span class="eval-tag ${getScoreClass(bMove.score)}">${bMove.score}</span>` : '';
-                    html += `<tr><td class="num-col">${moveNum}.</td><td><strong>${wMove.san}</strong> ${wHtml}</td><td>${bMove ? `<strong>${bMove.san}</strong> ${bHtml}` : ''}</td></tr>`;
-                }
-                $('#history-body').html(html);
-                $('.history-container').animate({ scrollTop: $('.history-container')[0].scrollHeight }, 50);
-            }
-
-            function drawArrow(uciMove) {
-                var $group = $('#arrow-group');
-                $group.empty();
-                if (uciMove !== undefined) currentArrowUci = uciMove;
-                if (!currentArrowUci || game.game_over()) return;
-
-                var from = currentArrowUci.substring(0, 2);
-                var to = currentArrowUci.substring(2, 4);
-                
-                var $startSq = $('.square-' + from);
-                var $endSq = $('.square-' + to);
-                var $wrapper = $('#board-wrapper');
-
-                if ($startSq.length === 0 || $endSq.length === 0) return;
-
-                var wOffset = $wrapper.offset();
-                var sOffset = $startSq.offset();
-                var eOffset = $endSq.offset();
-
-                var startX = sOffset.left - wOffset.left + ($startSq.width() / 2);
-                var startY = sOffset.top - wOffset.top + ($startSq.height() / 2);
-                var endX = eOffset.left - wOffset.left + ($endSq.width() / 2);
-                var endY = eOffset.top - wOffset.top + ($endSq.height() / 2);
-
-                var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', startX); line.setAttribute('y1', startY);
-                line.setAttribute('x2', endX); line.setAttribute('y2', endY);
-                line.setAttribute('stroke', '#151515'); 
-                line.setAttribute('stroke-width', $startSq.width() * 0.18); 
-                line.setAttribute('marker-end', 'url(#arrowhead)'); 
-                line.setAttribute('opacity', '0.7');
-                $group.append(line);
-            }
-
-            function updateUI() {
-                var color = (game.turn() === 'w') ? '白方' : '黑方';
-                if (game.game_over()) {
-                    $('#status').html('<span style="color:#d32f2f;">遊戲結束</span>');
-                    safePlaySound(sounds.gameover);
-                    drawArrow(null); 
-                } else {
-                    $('#status').html(color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(將軍)</span>' : ''));
-                    drawArrow(null);
-                }
-                detectOpening();
-            }
-
-            function onDrop(source, target) {
-                var move = game.move({ from: source, to: target, promotion: 'q' });
-                if (move === null) return 'snapback';
-
-                redoStack = []; 
-                $('.highlight-square').removeClass('highlight-square');
-                clickedSquare = null;
-                playMoveSound(move);
-                updateUI();
-                
-                let moveIndex = moveHistory.length;
-                moveHistory.push({ san: move.san, score: '...' });
-                renderHistory();
-                requestAnalysis(moveIndex);
-            }
-
-            var config = {
+            board = Chessboard('board', {
                 draggable: true, position: 'start',
                 pieceTheme: (p) => `https://images.chesscomfiles.com/chess-themes/pieces/neo/150/${p.toLowerCase()}.png`,
-                onDragStart: (source, piece) => {
-                    if (game.game_over()) return false;
-                    if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
-                },
-                onDrop: onDrop, onSnapEnd: () => board.position(game.fen()) 
-            };
-            board = Chessboard('board', config);
-
-            $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
-                if (e.type === 'touchstart') lastTouchTime = Date.now();
-                else if (Date.now() - lastTouchTime < 100) return;
-
-                if (game.game_over()) return;
-                var square = $(this).attr('data-square'), pieceObj = game.get(square);
-
-                if (clickedSquare === null) {
-                    if (pieceObj && pieceObj.color === game.turn()) { clickedSquare = square; $(this).addClass('highlight-square'); }
-                    return;
+                onDrop: (source, target) => {
+                    let m = game.move({ from: source, to: target, promotion: 'q' });
+                    if (m === null) return 'snapback';
+                    moveHistory.push({ san: m.san, score: '...' });
+                    board.position(game.fen());
+                    requestAnalysis();
                 }
-                var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-                $('.highlight-square').removeClass('highlight-square');
-
-                if (move === null) {
-                    if (pieceObj && pieceObj.color === game.turn()) { clickedSquare = square; $(this).addClass('highlight-square'); }
-                    else clickedSquare = null;
-                    return;
-                }
-                
-                redoStack = []; 
-                board.position(game.fen());
-                clickedSquare = null;
-                playMoveSound(move);
-                updateUI();
-                
-                let moveIndex = moveHistory.length;
-                moveHistory.push({ san: move.san, score: '...' });
-                renderHistory();
-                requestAnalysis(moveIndex);
             });
 
-            function doUndo() {
-                if (moveHistory.length === 0) return;
-                var undoneMove = game.undo(); 
-                var historyItem = moveHistory.pop();
-                redoStack.push({ move: undoneMove, historyItem: historyItem });
-                
-                renderHistory();
-                board.position(game.fen());
-                $('.highlight-square').removeClass('highlight-square');
-                clickedSquare = null;
-                
-                safePlaySound(sounds.move);
-                
-                if (game.history().length === 0) {
-                    lastKnownOpening = { eco: '', name: '' };
-                    $('#opening-info').html('<span style="color:#bbb; font-weight: normal;">(尚未形成標準開局)</span>');
-                }
-                updateUI(); requestAnalysis();
-            }
-
-            function doRedo() {
-                if (redoStack.length === 0) return;
-                var popped = redoStack.pop();
-                var move = game.move(popped.move.san);
-                moveHistory.push(popped.historyItem);
-                
-                playMoveSound(move);
-                renderHistory();
-                board.position(game.fen());
-                updateUI(); requestAnalysis();
-            }
-
-            $('#undo-btn').on('click', doUndo);
-
-            $('#flip-btn').on('click', function() {
-                board.flip();
-                setTimeout(() => drawArrow(currentArrowUci), 50); 
-            });
-
-            $(document).on('keydown', function(e) {
-                if ($(e.target).is('textarea')) return;
-                if (e.key === 'ArrowLeft') doUndo();
-                else if (e.key === 'ArrowRight') doRedo();
-            });
-
-            $('#import-btn').on('click', () => $('#pgn-modal').css('display', 'flex'));
-            $('#cancel-pgn').on('click', () => $('#pgn-modal').hide());
-            $('#confirm-pgn').on('click', function() {
-                let pgnData = $('#pgn-input').val().trim();
-                if (!pgnData) return;
-                if (game.load_pgn(pgnData)) {
-                    redoStack = []; 
-                    board.position(game.fen()); moveHistory = [];
-                    game.history({ verbose: true }).forEach(m => moveHistory.push({ san: m.san, score: '...' }));
-                    renderHistory(); updateUI(); requestAnalysis(moveHistory.length - 1);
-                    $('#pgn-modal').hide(); $('#pgn-input').val('');
-                } else alert('無效的 PGN 格式！');
-            });
-
-            // 啟動分析
-            $('#engine-suggestions').html('<div class="loading">等待開局...</div>');
-            updateUI();
-            setTimeout(() => { requestAnalysis(); }, 500);
-            
-            // 當使用者點擊「極速模式」開關時，立刻重新請求分析目前的盤面
-            $('#turbo-toggle').on('change', function() {
-                requestAnalysis(); 
-            });
-            $(window).resize(() => { board.resize(); setTimeout(() => drawArrow(currentArrowUci), 100); });
+            $('#undo-btn').on('click', () => { game.undo(); moveHistory.pop(); board.position(game.fen()); requestAnalysis(); });
+            $('#turbo-toggle').on('change', requestAnalysis);
+            $(window).resize(() => board.resize());
+            requestAnalysis();
         });
     </script>
 </body>
