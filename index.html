@@ -23,15 +23,37 @@
         .history-container { flex-grow: 1; overflow-y: auto; background: var(--panel-bg); border-radius: 12px; padding: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
         .eval-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px; }
-        .score-pos { background: #e8f5e9; color: #2e7d32; }
-        .score-neg { background: #ffebee; color: #c62828; }
         .btn-action { padding: 6px 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-weight: bold; font-size: 0.85rem;}
         .btn-turbo { color: #d32f2f; border-color: #ffcdd2; background: #fff5f5; display: flex; align-items: center; gap: 4px; }
         .move-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 12px; background: #f9f9fb; border: 1px solid #f0f0f5; border-radius: 8px; font-size: 0.95rem; }
         .loading { color: #aaa; font-style: italic; text-align: center; padding: 10px; }
         
-        /* 強化選取框的樣式 */
+        /* 核心修正：讓棋子圖片不阻擋點擊事件傳遞到下方的方格 */
+        .piece-417db { pointer-events: none; }
         .highlight-square { box-shadow: inset 0 0 0 4px rgba(245, 245, 0, 0.8) !important; background-color: rgba(245, 245, 0, 0.3) !important; }
+
+        /* 📱 手機版專屬排版 (直式完美佈局) */
+        @media (max-width: 900px) {
+            body { padding: 10px; }
+            /* 1. 強制上下垂直排列 */
+            .main-container { flex-direction: column; align-items: center; gap: 15px; }
+            
+            /* 2. 棋盤自適應螢幕寬度，並保持與優勢條的比例 */
+            .board-and-eval { width: 100%; max-width: 500px; height: auto; justify-content: center; }
+            #board-wrapper { width: calc(100vw - 60px); max-width: 450px; }
+            #eval-bar { height: calc(100vw - 60px); max-height: 450px; }
+            
+            /* 3. 面板佔滿全寬，並在棋盤下方展開 */
+            .side-panel { width: 100%; max-width: 500px; height: auto; }
+            
+            /* 4. 讓頂部按鈕區在手機上自動折行，避免按鈕擠成一團 */
+            .info-card > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 12px; }
+            .info-card > div:first-child > div:last-child { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+            .btn-action { flex-grow: 1; text-align: center; justify-content: center; } 
+            
+            /* 5. 限制歷史紀錄區塊高度，讓它可以在手機上獨立滑動 */
+            .history-container { height: 250px; } 
+        }
     </style>
 </head>
 <body>
@@ -87,6 +109,13 @@
             var board = null, game = new Chess(), moveHistory = [], redoStack = [];
             var analysisTimeout = null, currentAjaxRequest = null, currentArrowUci = null, currentMultiPV = [];
             var clickedSquare = null;
+
+            // 🛑 核心函數：同步棋盤並徹底殺死殘影
+            function syncBoard() {
+                setTimeout(() => {
+                    board.position(game.fen(), false); // false 代表關閉動畫
+                }, 0);
+            }
 
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
@@ -187,8 +216,48 @@
                 }
             }
 
-            // --- 拖曳移動的處理 ---
-            var config = {
+            // --- 點按移動邏輯 ---
+            function onSquareClick(square) {
+                var pieceObj = game.get(square);
+
+                // 1. 選取棋子
+                if (clickedSquare === null) {
+                    if (pieceObj && pieceObj.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $('.square-' + square).addClass('highlight-square');
+                    }
+                    return;
+                }
+
+                // 2. 嘗試移動
+                var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                
+                // 如果移動失敗，看看是不是想改點另一顆棋子
+                if (move === null) {
+                    if (pieceObj && pieceObj.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $('.square-' + square).addClass('highlight-square');
+                    } else {
+                        clickedSquare = null;
+                        $('.highlight-square').removeClass('highlight-square');
+                    }
+                    return;
+                }
+
+                // 3. 移動成功
+                clickedSquare = null;
+                $('.highlight-square').removeClass('highlight-square');
+                syncBoard();
+                updateUI();
+                moveHistory.push({ san: move.san, score: '...' });
+                renderHistory();
+                requestAnalysis();
+            }
+
+            // --- 初始化棋盤 ---
+            board = Chessboard('board', {
                 draggable: true, position: 'start',
                 pieceTheme: (p) => `https://images.chesscomfiles.com/chess-themes/pieces/neo/150/${p.toLowerCase()}.png`,
                 onDragStart: (source, piece) => {
@@ -198,8 +267,7 @@
                 onDrop: (source, target) => {
                     var move = game.move({ from: source, to: target, promotion: 'q' });
                     if (move === null) return 'snapback';
-
-                    redoStack = [];
+                    
                     $('.highlight-square').removeClass('highlight-square');
                     clickedSquare = null;
                     
@@ -208,80 +276,14 @@
                     renderHistory();
                     requestAnalysis();
                 },
-                // 🛑 殘影殺手：拖曳放下後，瞬間重繪防止動畫殘影
-                onSnapEnd: () => {
-                    board.position(game.fen(), false);
-                }
-            };
-            board = Chessboard('board', config);
+                onSnapEnd: syncBoard
+            });
 
-            // --- 🛑 點按移動的「強制攔截」處理 ---
-            var boardEl = document.getElementById('board');
-            var lastTapTime = 0;
-
-            function handleTapMove(e) {
-                if (e.type === 'touchstart') lastTapTime = Date.now();
-                else if (Date.now() - lastTapTime < 100) return;
-
-                if (game.game_over()) return;
-
-                var target = e.target;
-                var squareEl = target.closest ? target.closest('.square-55d63') : null;
-                if (!squareEl && target.classList && target.classList.contains('square-55d63')) squareEl = target;
-                if (!squareEl && target.parentNode && target.parentNode.classList && target.parentNode.classList.contains('square-55d63')) squareEl = target.parentNode;
-
-                if (!squareEl) return;
-
-                var square = squareEl.getAttribute('data-square');
-                var pieceObj = game.get(square);
-
-                // 1. 選取棋子
-                if (clickedSquare === null) {
-                    if (pieceObj && pieceObj.color === game.turn()) {
-                        clickedSquare = square;
-                        $('.highlight-square').removeClass('highlight-square');
-                        $(squareEl).addClass('highlight-square');
-                    }
-                    return;
-                }
-
-                // 2. 嘗試移動
-                var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-
-                if (move === null) {
-                    // 如果點到自己的其他棋子，改為選取新棋子
-                    if (pieceObj && pieceObj.color === game.turn()) {
-                        clickedSquare = square;
-                        $('.highlight-square').removeClass('highlight-square');
-                        $(squareEl).addClass('highlight-square');
-                    } else {
-                        clickedSquare = null;
-                        $('.highlight-square').removeClass('highlight-square');
-                    }
-                    return;
-                }
-
-                // 3. 成功移動！強制中斷事件，防止 chessboard.js 誤判為拖曳
-                e.stopPropagation();
-                e.preventDefault();
-
-                clickedSquare = null;
-                $('.highlight-square').removeClass('highlight-square');
-                redoStack = [];
-
-                // 🛑 殘影殺手：強制關閉動畫，瞬間精準更新
-                board.position(game.fen(), false);
-                updateUI();
-
-                moveHistory.push({ san: move.san, score: '...' });
-                renderHistory();
-                requestAnalysis();
-            }
-
-            // 掛載在 Capture Phase，比 chessboard.js 更早攔截事件
-            boardEl.addEventListener('mousedown', handleTapMove, true);
-            boardEl.addEventListener('touchstart', handleTapMove, {capture: true, passive: false});
-
+            // --- 綁定點擊事件到方格 ---
+            $('#board').on('click', '.square-55d63', function() {
+                var square = $(this).attr('data-square');
+                onSquareClick(square);
+            });
 
             function renderHistory() {
                 let html = '';
@@ -296,14 +298,8 @@
             }
 
             $('#undo-btn').on('click', () => { 
-                var undoneMove = game.undo(); 
-                if(!undoneMove) return;
-                var item = moveHistory.pop();
-                redoStack.push({ move: undoneMove, historyItem: item });
-                board.position(game.fen(), false); 
-                updateUI(); renderHistory(); requestAnalysis(); 
+                game.undo(); moveHistory.pop(); syncBoard(); updateUI(); renderHistory(); requestAnalysis(); 
             });
-
             $('#turbo-toggle').on('change', requestAnalysis);
             $(window).resize(() => board.resize());
             requestAnalysis();
