@@ -71,9 +71,9 @@
                         <label class="btn-action btn-turbo">
                             <input type="checkbox" id="turbo-toggle"> 單一
                         </label>
-                        <button class="btn-action" id="import-btn">匯入 PGN</button>
-                        <button class="btn-action" id="flip-btn">翻轉</button>
-                        <button class="btn-action" id="undo-btn">悔棋</button>
+                        <button class="btn-action" id="import-btn"> 匯入 PGN</button>
+                        <button class="btn-action" id="flip-btn"> 翻轉</button>
+                        <button class="btn-action" id="undo-btn"> 悔棋</button>
                     </div>
                 </div>
                 <div id="opening-info" style="margin-top:10px; color:#0056b3; font-weight:bold;"></div>
@@ -97,21 +97,6 @@
             var board = null, game = new Chess(), moveHistory = [];
             var analysisTimeout = null, currentAjaxRequest = null, currentArrowUci = null, currentMultiPV = [];
             var clickedSquare = null;
-
-            // --- 音效載入區塊 ---
-            const audioMove = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3');
-            const audioCapture = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3');
-            const audioCheck = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3');
-
-            function playSound(move) {
-                if (game.in_check()) {
-                    audioCheck.play().catch(e => console.log(e));
-                } else if (move.captured) {
-                    audioCapture.play().catch(e => console.log(e));
-                } else {
-                    audioMove.play().catch(e => console.log(e));
-                }
-            }
 
             function renderMultiPvUI() {
                 if (currentMultiPV.length === 0) return;
@@ -159,7 +144,7 @@
 
             function callColabEngine(fen, multipv) {
                 $('#engine-label').text('Stockfish 計算中');
-                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev";
+                const colabBaseUrl = "https://tuesday-spoilage-ceremony.ngrok-free.dev"; // 確保這裡的 ngrok 網址是最新有效的
                 currentAjaxRequest = $.ajax({
                     url: `${colabBaseUrl}/analyze?fen=${encodeURIComponent(fen)}&multipv=${multipv}`,
                     method: 'GET',
@@ -207,7 +192,7 @@
                     $('#status').html('<span style="color:#d32f2f;">遊戲結束</span>');
                     drawArrow(null); 
                 } else {
-                    $('#status').html(color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(將軍)</span>' : ''));
+                    $('#status').html(color + '回合' + (game.in_check() ? ' <span style="color:#d32f2f;">(check)</span>' : ''));
                     drawArrow(null);
                 }
             }
@@ -219,19 +204,12 @@
                 onDragStart: (source, piece) => {
                     if (game.game_over()) return false;
                     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
-
-                    // 🚨 關鍵修復 1：只要使用者開始「拖曳」，就強制清除「點擊選取」的黃框狀態，避免兩套邏輯打架！
-                    clickedSquare = null;
-                    $('.highlight-square').removeClass('highlight-square');
                 },
                 onDrop: (source, target) => {
                     var move = game.move({ from: source, to: target, promotion: 'q' });
                     if (move === null) return 'snapback';
-
-                    clickedSquare = null;
                     $('.highlight-square').removeClass('highlight-square');
-
-                    playSound(move); // 播放音效
+                    clickedSquare = null;
                     updateUI();
                     moveHistory.push({ san: move.san, score: '...' });
                     renderHistory();
@@ -240,50 +218,45 @@
                 onSnapEnd: () => { board.position(game.fen()); }
             });
 
-            // --- 核心：處理兩步點擊移動 (極簡終極版) ---
-            // 🚨 關鍵修復 2：捨棄複雜的座標計算，直接利用 mouseup 與 touchend 事件觸發
+            // --- 核心：處理點按移動 ---
+            var touchStartX, touchStartY;
+            $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
+                var evt = e.originalEvent.touches ? e.originalEvent.touches[0] : e;
+                touchStartX = evt.clientX; touchStartY = evt.clientY;
+            });
+
             $('#board').on('mouseup touchend', '.square-55d63', function(e) {
-                if (game.game_over()) return;
-
-                var square = $(this).attr('data-square');
-                var pieceObj = game.get(square);
-
-                if (clickedSquare === null) {
-                    // 狀態 1：目前沒有選取任何棋子，點擊自己的棋子使其亮起黃框
-                    if (pieceObj && pieceObj.color === game.turn()) {
-                        clickedSquare = square;
-                        $('.highlight-square').removeClass('highlight-square');
-                        $('.square-' + square).addClass('highlight-square');
-                    }
-                } else {
-                    // 狀態 2：已經有選取的棋子了
-                    if (clickedSquare === square) {
-                        // 情境 A：再點一次原本的棋子 -> 取消選取
-                        clickedSquare = null;
-                        $('.highlight-square').removeClass('highlight-square');
-                    } else if (pieceObj && pieceObj.color === game.turn()) {
-                        // 情境 B：點擊自己的其他棋子 -> 瞬間切換選取目標
-                        clickedSquare = square;
-                        $('.highlight-square').removeClass('highlight-square');
-                        $('.square-' + square).addClass('highlight-square');
+                var evt = e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : e;
+                var dx = Math.abs(evt.clientX - touchStartX);
+                var dy = Math.abs(evt.clientY - touchStartY);
+                if (dx < 5 && dy < 5) {
+                    var square = $(this).attr('data-square');
+                    var pieceObj = game.get(square);
+                    if (clickedSquare === null) {
+                        if (pieceObj && pieceObj.color === game.turn()) {
+                            clickedSquare = square;
+                            $('.highlight-square').removeClass('highlight-square');
+                            $('.square-' + square).addClass('highlight-square');
+                        }
                     } else {
-                        // 情境 C：點擊空白格或敵方棋子 -> 嘗試執行移動
                         var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-                        if (move) {
-                            // 移動合法！執行畫面更新與音效
+                        if (move === null) {
+                            if (pieceObj && pieceObj.color === game.turn()) {
+                                clickedSquare = square;
+                                $('.highlight-square').removeClass('highlight-square');
+                                $('.square-' + square).addClass('highlight-square');
+                            } else {
+                                clickedSquare = null;
+                                $('.highlight-square').removeClass('highlight-square');
+                            }
+                        } else {
                             clickedSquare = null;
                             $('.highlight-square').removeClass('highlight-square');
-                            board.position(game.fen(), false);
-
-                            playSound(move); 
+                            board.position(game.fen(), false); 
                             updateUI();
                             moveHistory.push({ san: move.san, score: '...' });
                             renderHistory();
                             requestAnalysis();
-                        } else {
-                            // 移動不合法 (例如馬走直線) -> 單純取消選取
-                            clickedSquare = null;
-                            $('.highlight-square').removeClass('highlight-square');
                         }
                     }
                 }
@@ -308,36 +281,42 @@
             $('#turbo-toggle').on('change', requestAnalysis);
             $(window).resize(() => board.resize());
             
+            // 【新增】綁定「翻轉」按鈕功能
             $('#flip-btn').on('click', () => { 
-                board.flip();
+                board.flip(); // 呼叫 chessboard.js 內建的翻轉功能
+                
+                // 棋盤翻轉後，SVG 箭頭的座標會跑掉，所以要重新畫一次最佳路徑
                 if (currentMultiPV.length > 0 && currentMultiPV[0].uci) {
                     drawArrow(currentMultiPV[0].uci);
                 }
             });
 
+            // 【新增】綁定「匯入 PGN / FEN」按鈕功能
             $('#import-btn').on('click', () => {
                 let input = prompt("📥 請貼上 PGN 或是 FEN 格式的棋局紀錄：\n（例如：rnbqkbnr/pppppppp/8/...）");
-                if (!input) return; 
+                if (!input) return; // 如果使用者按取消或沒有輸入就跳出
 
                 let success = false;
+                // 簡單判斷輸入的是 FEN 還是 PGN
                 if (input.indexOf(' ') !== -1 && input.indexOf('/') !== -1 && input.length < 100) {
-                    success = game.load(input); 
+                    success = game.load(input); // 載入 FEN 格式
                 } else {
-                    success = game.load_pgn(input); 
+                    success = game.load_pgn(input); // 載入 PGN 格式
                 }
 
                 if (success) {
-                    board.position(game.fen()); 
-                    moveHistory = []; 
+                    board.position(game.fen()); // 更新前端棋盤畫面
+                    moveHistory = []; // 匯入新局，清空舊的歷史紀錄
                     
+                    // 如果是 PGN 匯入，將歷史紀錄重新解析出來放入表格
                     let history = game.history({ verbose: true });
                     history.forEach(m => moveHistory.push({ san: m.san, score: '...' }));
                     
-                    renderHistory(); 
-                    updateUI(); 
-                    requestAnalysis(); 
+                    renderHistory(); // 重新渲染右側表格
+                    updateUI(); // 更新回合與狀態文字
+                    requestAnalysis(); // 觸發引擎針對新盤面進行重新計算
                 } else {
-                    alert("❌ 格式錯誤，無法解析");
+                    alert("❌ 格式錯誤，無法解析這段文字！");
                 }
             });
 
