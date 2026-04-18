@@ -103,7 +103,6 @@
             const audioCapture = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3');
             const audioCheck = new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3');
 
-            // 播放音效的邏輯判斷
             function playSound(move) {
                 if (game.in_check()) {
                     audioCheck.play().catch(e => console.log(e));
@@ -220,15 +219,19 @@
                 onDragStart: (source, piece) => {
                     if (game.game_over()) return false;
                     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+
+                    // 🚨 關鍵修復 1：只要使用者開始「拖曳」，就強制清除「點擊選取」的黃框狀態，避免兩套邏輯打架！
+                    clickedSquare = null;
+                    $('.highlight-square').removeClass('highlight-square');
                 },
                 onDrop: (source, target) => {
                     var move = game.move({ from: source, to: target, promotion: 'q' });
                     if (move === null) return 'snapback';
-                    $('.highlight-square').removeClass('highlight-square');
+
                     clickedSquare = null;
-                    
-                    playSound(move); // 拖曳放開時播放音效
-                    
+                    $('.highlight-square').removeClass('highlight-square');
+
+                    playSound(move); // 播放音效
                     updateUI();
                     moveHistory.push({ san: move.san, score: '...' });
                     renderHistory();
@@ -237,64 +240,50 @@
                 onSnapEnd: () => { board.position(game.fen()); }
             });
 
-            // --- 核心：處理兩步點擊移動 (優化版) ---
-            var touchStartX, touchStartY;
-            $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
-                var evt = e.originalEvent.touches ? e.originalEvent.touches[0] : e;
-                touchStartX = evt.clientX; touchStartY = evt.clientY;
-            });
-
+            // --- 核心：處理兩步點擊移動 (極簡終極版) ---
+            // 🚨 關鍵修復 2：捨棄複雜的座標計算，直接利用 mouseup 與 touchend 事件觸發
             $('#board').on('mouseup touchend', '.square-55d63', function(e) {
-                var evt = e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : e;
-                var dx = Math.abs(evt.clientX - touchStartX);
-                var dy = Math.abs(evt.clientY - touchStartY);
-                
-                // 確保這是一次乾淨的「點擊」而不是「拖曳」
-                if (dx < 5 && dy < 5) {
-                    if (game.game_over()) return; // 遊戲結束不給點
-                    
-                    var square = $(this).attr('data-square');
-                    var pieceObj = game.get(square);
+                if (game.game_over()) return;
 
-                    if (clickedSquare === null) {
-                        // 狀態1：目前沒有選取棋子。如果點擊了自己的棋子，就將其選取
-                        if (pieceObj && pieceObj.color === game.turn()) {
-                            clickedSquare = square;
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.square-' + square).addClass('highlight-square');
-                        }
+                var square = $(this).attr('data-square');
+                var pieceObj = game.get(square);
+
+                if (clickedSquare === null) {
+                    // 狀態 1：目前沒有選取任何棋子，點擊自己的棋子使其亮起黃框
+                    if (pieceObj && pieceObj.color === game.turn()) {
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $('.square-' + square).addClass('highlight-square');
+                    }
+                } else {
+                    // 狀態 2：已經有選取的棋子了
+                    if (clickedSquare === square) {
+                        // 情境 A：再點一次原本的棋子 -> 取消選取
+                        clickedSquare = null;
+                        $('.highlight-square').removeClass('highlight-square');
+                    } else if (pieceObj && pieceObj.color === game.turn()) {
+                        // 情境 B：點擊自己的其他棋子 -> 瞬間切換選取目標
+                        clickedSquare = square;
+                        $('.highlight-square').removeClass('highlight-square');
+                        $('.square-' + square).addClass('highlight-square');
                     } else {
-                        // 狀態2：目前已經有選取的棋子
-                        if (clickedSquare === square) {
-                            // 情境A：點擊同一個格子（取消選取）
+                        // 情境 C：點擊空白格或敵方棋子 -> 嘗試執行移動
+                        var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
+                        if (move) {
+                            // 移動合法！執行畫面更新與音效
                             clickedSquare = null;
                             $('.highlight-square').removeClass('highlight-square');
-                        } else if (pieceObj && pieceObj.color === game.turn()) {
-                            // 情境B：點擊自己的另一個棋子（切換選取目標）
-                            clickedSquare = square;
-                            $('.highlight-square').removeClass('highlight-square');
-                            $('.square-' + square).addClass('highlight-square');
+                            board.position(game.fen(), false);
+
+                            playSound(move); 
+                            updateUI();
+                            moveHistory.push({ san: move.san, score: '...' });
+                            renderHistory();
+                            requestAnalysis();
                         } else {
-                            // 情境C：點擊其他格子（嘗試進行移動）
-                            var move = game.move({ from: clickedSquare, to: square, promotion: 'q' });
-                            
-                            if (move === null) {
-                                // 移動不合法（例如馬走直線）：清除選取狀態
-                                clickedSquare = null;
-                                $('.highlight-square').removeClass('highlight-square');
-                            } else {
-                                // 移動成功！
-                                clickedSquare = null;
-                                $('.highlight-square').removeClass('highlight-square');
-                                board.position(game.fen(), false); 
-                                
-                                playSound(move); // 點擊移動成功時播放音效
-                                
-                                updateUI();
-                                moveHistory.push({ san: move.san, score: '...' });
-                                renderHistory();
-                                requestAnalysis();
-                            }
+                            // 移動不合法 (例如馬走直線) -> 單純取消選取
+                            clickedSquare = null;
+                            $('.highlight-square').removeClass('highlight-square');
                         }
                     }
                 }
